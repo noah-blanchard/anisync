@@ -116,7 +116,7 @@ Notes:
 
 ## 5. Backup
 
-All state is in **`/data/anisync.db`** (encrypted tokens + id mapping cache). The lists themselves stay on MAL and AniList.
+All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history). The lists themselves stay on MAL and AniList.
 
 ```bash
 # safest: stop, copy, restart (a few seconds)
@@ -158,3 +158,21 @@ To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.
 - If only one service is connected, the app keeps working with it and shows a banner to connect the other.
 
 Keyboard shortcuts (desktop): `/` search, `+` on a focused card = next episode, `-` = previous episode.
+
+## Booster packs
+
+A discovery game on the home page: tear a pack open (swipe across its top, or the "Ouvrir" button), five anime come out
+and flip one by one. Swipe right (♥) to add one as "À voir" on both services, left (✕) to skip; ↶ undoes the last choice.
+Keyboard: `Enter` opens, `←` / `→` decide, `Backspace` undoes.
+
+- Cards come from a pool of AniList titles (28 pages of popular titles and well-rated hidden gems, keeping first
+  seasons with a MAL id so both lists can be written), cached in memory for 24 h and filled in the background with
+  spaced requests. Titles already in your lists, drawn recently or
+  skipped in the last 30 days are left out.
+- Rarity per slot, the best card last: three Communes, a Rare (sometimes Épique), then the "hit" slot. The top tier,
+  **Pépite**, is a hidden gem: score ≥ 78 with fewer than 40k AniList members.
+- Ecchi and +18 titles are excluded unless "Contenu adulte" is enabled in Paramètres (per device).
+- The card source sits behind `BoosterSource` (`lib/booster-source.ts`): swapping the random pool for a recommendation
+  engine does not touch the API route or the UI. Every swipe is logged in `booster_swipes` for that purpose.
+- Haptics: vibration patterns on Android; on iOS 18+ a single system tick on key moments (Safari has no vibration API).
+  Everything calms down to simple fades when the device asks for reduced motion.

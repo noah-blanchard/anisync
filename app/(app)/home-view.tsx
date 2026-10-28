@@ -4,6 +4,7 @@ import { ListChecksIcon, RefreshCwIcon } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
+import { BoosterShelf } from "@/components/booster/booster-shelf";
 import { ENTRY_GRID, EntryCard } from "@/components/entry-card";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/list-states";
 import { useOverlay } from "@/components/overlay-context";
@@ -75,6 +76,7 @@ export function HomeView() {
       />
 
       <InstallCard />
+      <BoosterShelf />
 
       {isPending ? (
         <ListSkeleton />
