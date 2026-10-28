@@ -51,6 +51,17 @@ export function AppShell({
   const pathname = usePathname();
   useGlobalShortcuts();
 
+  // The booster takes the whole screen: no navigation to tap by accident mid-swipe.
+  if (pathname.startsWith("/booster")) {
+    return (
+      <OverlayProvider>
+        <div aria-hidden className="status-bar-scrim" />
+        {children}
+        <EntryOverlays />
+      </OverlayProvider>
+    );
+  }
+
   return (
     <OverlayProvider>
       <div aria-hidden className="status-bar-scrim" />

@@ -1,9 +1,8 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, Loader2Icon, PlusIcon, SearchIcon } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Cover } from "@/components/entry-bits";
 import { EmptyState } from "@/components/list-states";
@@ -11,12 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { reportResult } from "@/hooks/use-entry-actions";
-import { LIST_KEY } from "@/hooks/use-list";
-import { api, type AnnotatedSearchResult, type WriteResult } from "@/lib/client-api";
+import { useAddEntry } from "@/hooks/use-entry-actions";
+import { api, type AnnotatedSearchResult } from "@/lib/client-api";
 import { accentStyle } from "@/lib/color";
 import { episodesLabel, formatLabel, STATUS_LABELS, STATUS_ORDER } from "@/lib/labels";
-import type { CanonicalStatus, ServiceName } from "@/lib/mapping";
+import type { CanonicalStatus } from "@/lib/mapping";
 
 function useDebounced<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = React.useState(value);
@@ -28,32 +26,9 @@ function useDebounced<T>(value: T, delay: number): T {
 }
 
 function ResultCard({ result }: { result: AnnotatedSearchResult }) {
-  const qc = useQueryClient();
   const [status, setStatus] = React.useState<CanonicalStatus>("plan_to_watch");
   const [added, setAdded] = React.useState(false);
-
-  const add = useMutation({
-    mutationFn: (vars: { targets?: ServiceName[] }) =>
-      api<WriteResult>("/api/entry", {
-        method: "POST",
-        body: JSON.stringify({
-          malId: result.malId ?? undefined,
-          anilistId: result.anilistId,
-          patch: { status },
-          targets: vars.targets,
-        }),
-      }),
-    onSuccess: (res, vars) => {
-      const ok = reportResult(res, (targets) => add.mutate({ ...vars, targets }), "Ajout");
-      if (res.mal.ok || res.anilist.ok) {
-        setAdded(true);
-        void qc.invalidateQueries({ queryKey: LIST_KEY });
-        void qc.invalidateQueries({ queryKey: ["search"] });
-      }
-      if (ok) toast.success(`${result.title} ajouté (${STATUS_LABELS[status]})`);
-    },
-    onError: (error) => toast.error(`Ajout impossible : ${error.message}`),
-  });
+  const add = useAddEntry({ onAdded: () => setAdded(true) });
 
   const inList = result.inList || added;
   const meta = [result.year, formatLabel(result.format), episodesLabel(result.totalEpisodes)].filter(Boolean).join(" · ");
@@ -99,7 +74,7 @@ function ResultCard({ result }: { result: AnnotatedSearchResult }) {
             </Select>
             <Button
               className="h-10"
-              onClick={() => add.mutate({})}
+              onClick={() => add.mutate({ target: result, status })}
               disabled={add.isPending}
               aria-label={`Ajouter ${result.title}`}
             >

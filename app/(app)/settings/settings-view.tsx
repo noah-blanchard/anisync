@@ -12,6 +12,9 @@ import { InstallButton, usePwa } from "@/components/pwa";
 import { useTheme, type ThemePreference } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { useBoosterAdult } from "@/hooks/use-booster";
 import { LIST_KEY } from "@/hooks/use-list";
 import { api, type ConnectionInfo } from "@/lib/client-api";
 import { daysUntil, formatDate } from "@/lib/labels";
@@ -183,6 +186,30 @@ function AppSection({ appUrl, qrSvg }: { appUrl: string; qrSvg: string }) {
   );
 }
 
+function BoosterSection() {
+  const [adult, setAdult] = useBoosterAdult();
+  return (
+    <Section title="Boosters">
+      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4">
+        <div className="min-w-0">
+          <Label htmlFor="booster-adult" className="leading-snug">
+            Contenu adulte
+          </Label>
+          <p id="booster-adult-description" className="mt-1 text-sm text-muted-foreground">
+            Inclut les animes ecchi et +18 dans les boosters. Réglage propre à cet appareil.
+          </p>
+        </div>
+        <Switch
+          id="booster-adult"
+          checked={adult}
+          onCheckedChange={setAdult}
+          aria-describedby="booster-adult-description"
+        />
+      </div>
+    </Section>
+  );
+}
+
 export function SettingsView({
   connections,
   redirectUris,
@@ -267,6 +294,8 @@ export function SettingsView({
           ))}
         </div>
       </Section>
+
+      <BoosterSection />
 
       <Section title="Session">
         <div className="flex flex-wrap items-center justify-between gap-3">
