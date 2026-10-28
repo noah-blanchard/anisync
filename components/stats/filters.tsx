@@ -150,6 +150,37 @@ function SearchFacet({
   );
 }
 
+/** Years I finished titles in, latest first. */
+function CompletionYears({
+  rows,
+  selected,
+  onToggle,
+}: {
+  rows: readonly StatsRow[];
+  selected: number[];
+  onToggle: (year: number) => void;
+}) {
+  const years = React.useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const r of rows) {
+      if (r.completedAt === null) continue;
+      const y = new Date(r.completedAt).getUTCFullYear();
+      counts.set(y, (counts.get(y) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[0] - a[0]);
+  }, [rows]);
+  if (years.length === 0) return <p className="text-sm text-muted-foreground">Aucune date de fin</p>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {years.map(([year, count]) => (
+        <Chip key={year} pressed={selected.includes(year)} count={count} onClick={() => onToggle(year)}>
+          {year}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
 const SCORES = Array.from({ length: 10 }, (_, i) => i + 1);
 
 function ScoreSelect({
@@ -266,6 +297,10 @@ export function FilterSheet({
           />
         </FilterSection>
 
+        <FilterSection title="Terminé en">
+          <CompletionYears rows={rows} selected={filters.completedYears} onToggle={(y) => onChange({ ...filters, completedYears: toggle(filters.completedYears, y) })} />
+        </FilterSection>
+
         <FilterSection title="Décennie">
           <ChipFacet
             rows={rows}
@@ -334,6 +369,7 @@ function activeChips(f: StatsFilters): ActiveChip[] {
   list("tags", (v: string) => v);
   list("formats", formatName);
   list("lengths", (v: keyof typeof LENGTH_LABELS) => LENGTH_LABELS[v]);
+  list("completedYears", (v: number) => `Terminé en ${v}`);
   list("decades", decadeLabel);
   list("sources", sourceLabel);
   list("studios", (v: string) => v);

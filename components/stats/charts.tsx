@@ -2,7 +2,7 @@
 
 import { MedalIcon } from "lucide-react";
 import * as React from "react";
-import type { Medal } from "@/lib/stats/gold";
+import type { Medal } from "@/lib/stats/profile";
 import { cn } from "@/lib/utils";
 
 /**
@@ -178,7 +178,8 @@ export interface ColumnDatum {
 function niceMax(value: number): number {
   if (value <= 0) return 1;
   const magnitude = 10 ** Math.floor(Math.log10(value));
-  const step = [1, 2, 2.5, 5, 10].find((s) => s * magnitude >= value)!;
+  // Even steps, so the middle gridline of integer data stays an integer.
+  const step = [1, 2, 4, 6, 8, 10].find((s) => s * magnitude >= value)!;
   return step * magnitude;
 }
 

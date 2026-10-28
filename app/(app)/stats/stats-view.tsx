@@ -17,17 +17,21 @@ import { useRefreshStats, useStats } from "@/hooks/use-stats";
 import { activeFilterCount, applyFilters, tasteRows, type StatsFilters } from "@/lib/stats/gold";
 import { mergeFilters, parseStatsParams, statsSearch, type StatsTab } from "@/lib/stats/url";
 import { cn } from "@/lib/utils";
+import { BacklogTab } from "./backlog-tab";
 import { CatalogTab } from "./catalog-tab";
 import { OverviewTab } from "./overview-tab";
 import { ProfileTab } from "./profile-tab";
 import { ScoresTab } from "./scores-tab";
 import { TastesTab } from "./tastes-tab";
+import { TimeTab } from "./time-tab";
 
 const TABS: { id: StatsTab; label: string }[] = [
   { id: "overview", label: "Vue d'ensemble" },
+  { id: "time", label: "Temps" },
   { id: "tastes", label: "Goûts" },
   { id: "scores", label: "Notes" },
   { id: "catalog", label: "Catalogue" },
+  { id: "backlog", label: "Backlog" },
   { id: "profile", label: "Profil" },
 ];
 
@@ -200,6 +204,9 @@ export function StatsView() {
                 <TabsContent value="overview">
                   <OverviewTab rows={filtered} taste={taste} onSelect={setSelection} onTab={setTab} />
                 </TabsContent>
+                <TabsContent value="time">
+                  <TimeTab rows={taste} onSelect={setSelection} />
+                </TabsContent>
                 <TabsContent value="tastes">
                   <TastesTab rows={taste} tagCategories={data.tagCategories} onSelect={setSelection} />
                 </TabsContent>
@@ -209,8 +216,11 @@ export function StatsView() {
                 <TabsContent value="catalog">
                   <CatalogTab rows={taste} onSelect={setSelection} />
                 </TabsContent>
+                <TabsContent value="backlog">
+                  <BacklogTab rows={filtered} onSelect={setSelection} />
+                </TabsContent>
                 <TabsContent value="profile">
-                  <ProfileTab rows={taste} />
+                  <ProfileTab rows={filtered} />
                 </TabsContent>
               </>
             )}

@@ -20,6 +20,7 @@ export const rawMediaSchema = z.object({
   season: z.string().nullish(),
   seasonYear: z.number().nullish(),
   startDate: fuzzyDateSchema,
+  endDate: fuzzyDateSchema,
   source: z.string().nullish(),
   countryOfOrigin: z.string().nullish(),
   isAdult: z.boolean().nullish(),

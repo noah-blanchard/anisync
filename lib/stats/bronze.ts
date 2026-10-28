@@ -114,7 +114,11 @@ export async function loadMedia(ids: number[]): Promise<{ media: Map<number, Raw
   const now = Date.now();
   let cache = readMediaCache();
   const missing = ids.filter((id) => !cache.has(id));
-  const stale = ids.filter((id) => cache.has(id) && now - cache.get(id)!.fetchedAt > MEDIA_TTL_MS);
+  const stale = ids.filter((id) => {
+    const cached = cache.get(id);
+    // Rows fetched before the airing dates were part of the query are refreshed too.
+    return cached && (now - cached.fetchedAt > MEDIA_TTL_MS || (cached.media !== null && cached.media.endDate === undefined));
+  });
 
   if (missing.length > 0 && !globalForBronze.__anisyncStatsFill && !backingOff()) {
     for (const batch of batches(missing).slice(0, SYNC_BATCHES)) {

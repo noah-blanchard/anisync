@@ -4,7 +4,6 @@
  * so a filter change recomputes everything instantly.
  */
 import { CANONICAL_STATUSES, type CanonicalStatus } from "../mapping";
-import { genreLabel } from "./labels";
 import { mean, REFERENCE_MEAN, standardDeviation } from "./silver";
 import type { LengthBucket, StatsRow } from "./types";
 
@@ -26,6 +25,8 @@ export interface StatsFilters {
   countries: string[];
   decades: number[];
   lengths: LengthBucket[];
+  /** Years I finished the title in; set = titles without a finish date are left out */
+  completedYears: number[];
   /** Inclusive, on my 1-10 scores; set = unrated titles are left out */
   scoreMin: number | null;
   scoreMax: number | null;
@@ -42,6 +43,7 @@ export const EMPTY_FILTERS: StatsFilters = {
   countries: [],
   decades: [],
   lengths: [],
+  completedYears: [],
   scoreMin: null,
   scoreMax: null,
 };
@@ -57,6 +59,7 @@ export function activeFilterCount(f: StatsFilters): number {
     f.countries.length +
     f.decades.length +
     f.lengths.length +
+    f.completedYears.length +
     (f.scoreMin !== null || f.scoreMax !== null ? 1 : 0)
   );
 }
@@ -80,6 +83,7 @@ export function matchesFilters(row: StatsRow, f: StatsFilters): boolean {
   if (!oneOf(f.lengths, row.length)) return false;
   if (!oneOf(f.decades, row.year !== null ? decadeOf(row.year) : null)) return false;
   if (f.studios.length > 0 && !f.studios.some((s) => row.studios.includes(s))) return false;
+  if (!oneOf(f.completedYears, row.completedAt !== null ? new Date(row.completedAt).getUTCFullYear() : null)) return false;
   if (f.scoreMin !== null || f.scoreMax !== null) {
     if (row.score === null) return false;
     if (f.scoreMin !== null && row.score < f.scoreMin) return false;
@@ -651,17 +655,6 @@ export function completionsByYear(rows: readonly StatsRow[]): { year: number; co
   return out;
 }
 
-/** Episodes per day between the start and finish dates of completed titles. */
-export function watchPace(rows: readonly StatsRow[]): { titles: number; medianEpisodesPerDay: number | null } {
-  const paces = rows
-    .filter((r) => r.status === "completed" && r.startedAt !== null && r.completedAt !== null && r.episodes)
-    .map((r) => {
-      const days = Math.max(1, Math.round((r.completedAt! - r.startedAt!) / 86_400_000) + 1);
-      return r.episodes! / days;
-    });
-  return { titles: paces.length, medianEpisodesPerDay: median(paces) };
-}
-
 // ---------------------------------------------------------------------------
 // Records
 // ---------------------------------------------------------------------------
@@ -700,151 +693,4 @@ export function records(rows: readonly StatsRow[]): Records {
     timeSink: maxBy(rows, (r) => (r.minutesWatched > 0 ? r.minutesWatched : null)),
     mostRewatched: maxBy(rows, (r) => (r.repeat > 0 ? r.repeat : null)),
   };
-}
-
-// ---------------------------------------------------------------------------
-// Viewer profile: traits with a bronze / silver / gold medal
-// ---------------------------------------------------------------------------
-
-export type Medal = "bronze" | "silver" | "gold";
-
-export function medalOf(score: number): Medal | null {
-  if (score >= 85) return "gold";
-  if (score >= 60) return "silver";
-  if (score >= 35) return "bronze";
-  return null;
-}
-
-export interface Trait {
-  id: "volume" | "finisher" | "curiosity" | "gems" | "retro" | "pace" | "generosity";
-  /** The axis */
-  name: string;
-  /** Where I stand on it */
-  label: string;
-  /** 0-100 along the axis */
-  score: number;
-  medal: Medal | null;
-  detail: string;
-  /** The two ends of the axis */
-  poles: [string, string];
-}
-
-const fmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
-const log10 = Math.log10;
-
-/** Number of AniList genres outside Hentai: the most a curious viewer can spread over. */
-const GENRE_COUNT = 18;
-
-export function traits(rows: readonly StatsRow[], now = Date.now()): Trait[] {
-  const out: Trait[] = [];
-  const watched = rows.filter((r) => r.status !== "plan_to_watch");
-
-  const hours = watched.reduce((sum, r) => sum + r.minutesWatched, 0) / 60;
-  if (watched.length > 0) {
-    const score = Math.round(clamp((100 * log10(1 + hours)) / log10(1 + 2000)));
-    out.push({
-      id: "volume",
-      name: "Assiduité",
-      label: hours < 50 ? "Occasionnel" : hours < 250 ? "Régulier" : hours < 1000 ? "Assidu" : "Légende",
-      score,
-      medal: medalOf(score),
-      detail: `${fmt.format(Math.round(hours))} h de visionnage`,
-      poles: ["Occasionnel", "Légende"],
-    });
-  }
-
-  const completed = watched.filter((r) => r.status === "completed").length;
-  const dropped = watched.filter((r) => r.status === "dropped").length;
-  if (completed + dropped >= MIN_SAMPLE) {
-    const rate = completed / (completed + dropped);
-    const score = Math.round(rate * 100);
-    out.push({
-      id: "finisher",
-      name: "Persévérance",
-      label: rate < 0.6 ? "Zappeur" : rate < 0.85 ? "Sélectif" : "Finisseur",
-      score,
-      medal: medalOf(score),
-      detail: `${completed} terminés pour ${dropped} abandonnés`,
-      poles: ["Zappeur", "Finisseur"],
-    });
-  }
-
-  const genreCounts = new Map<string, number>();
-  for (const r of watched) for (const g of r.genres) if (g !== "Hentai") genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
-  const total = [...genreCounts.values()].reduce((a, b) => a + b, 0);
-  if (genreCounts.size >= 2 && watched.length >= MIN_SAMPLE) {
-    let entropy = 0;
-    for (const c of genreCounts.values()) entropy -= (c / total) * Math.log(c / total);
-    const score = Math.round(clamp((100 * entropy) / Math.log(GENRE_COUNT)));
-    const top = [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0]![0];
-    out.push({
-      id: "curiosity",
-      name: "Curiosité",
-      label: score < 70 ? "Spécialiste" : score < 85 ? "Curieux" : "Explorateur",
-      score,
-      medal: medalOf(score),
-      detail: `${genreCounts.size} genres, surtout ${genreLabel(top)}`,
-      poles: ["Spécialiste", "Explorateur"],
-    });
-  }
-
-  const popularity = median(watched.map((r) => r.popularity).filter((p): p is number => p !== null && p > 0));
-  if (popularity !== null) {
-    const score = Math.round(clamp((100 * (log10(400_000) - log10(popularity))) / (log10(400_000) - log10(4_000))));
-    out.push({
-      id: "gems",
-      name: "Flair",
-      label: score < 35 ? "Mainstream" : score < 65 ? "Équilibré" : "Défricheur",
-      score,
-      medal: medalOf(score),
-      detail: `Popularité médiane : ${fmt.format(Math.round(popularity))} membres AniList`,
-      poles: ["Mainstream", "Défricheur"],
-    });
-  }
-
-  const year = median(watched.map((r) => r.year).filter((y): y is number => y !== null));
-  if (year !== null) {
-    const age = new Date(now).getUTCFullYear() - year;
-    const score = Math.round(clamp((100 * age) / 25));
-    out.push({
-      id: "retro",
-      name: "Époque",
-      label: age < 5 ? "Chasseur de nouveautés" : age < 12 ? "Éclectique" : "Archéologue",
-      score,
-      medal: medalOf(score),
-      detail: `Année médiane de sortie : ${Math.round(year)}`,
-      poles: ["Nouveautés", "Archéologue"],
-    });
-  }
-
-  const pace = watchPace(watched);
-  if (pace.medianEpisodesPerDay !== null && pace.titles >= MIN_PAIRS) {
-    const epd = pace.medianEpisodesPerDay;
-    // 0.25 episode a day (one a month… almost) -> 0, 6 a day -> 100, on a log scale.
-    const score = Math.round(clamp((100 * (log10(epd) - log10(0.25))) / (log10(6) - log10(0.25))));
-    out.push({
-      id: "pace",
-      name: "Rythme",
-      label: score < 35 ? "Contemplatif" : score < 65 ? "Régulier" : "Binge-watcher",
-      score,
-      medal: medalOf(score),
-      detail: `${fmt.format(Math.round(epd * 10) / 10)} épisodes par jour en médiane (${pace.titles} titres datés)`,
-      poles: ["Contemplatif", "Binge-watcher"],
-    });
-  }
-
-  const rater = raterProfile(watched);
-  if (rater.bias !== null && rater.generosityIndex !== null && rater.generosity) {
-    out.push({
-      id: "generosity",
-      name: "Générosité",
-      label: GENEROSITY_LABELS[rater.generosity],
-      score: rater.generosityIndex,
-      medal: medalOf(Math.abs(rater.generosityIndex - 50) * 2),
-      detail: `${rater.bias >= 0 ? "+" : "−"}${fmt.format(Math.abs(Math.round(rater.bias * 10) / 10))} pt en moyenne par rapport à la communauté`,
-      poles: ["Sévère", "Généreux"],
-    });
-  }
-
-  return out;
 }

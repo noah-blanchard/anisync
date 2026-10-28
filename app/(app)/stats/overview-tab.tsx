@@ -134,6 +134,7 @@ export function OverviewTab({
                 onSelect({
                   title: `Terminés en ${datum.id}`,
                   rows: rows.filter((r) => r.completedAt !== null && new Date(r.completedAt).getUTCFullYear() === Number(datum.id)),
+                  filter: { completedYears: [Number(datum.id)] },
                 })
               }
             />

@@ -5,6 +5,7 @@ import { Cover } from "@/components/entry-bits";
 import { EmptyState } from "@/components/list-states";
 import { useOverlay } from "@/components/overlay-context";
 import { ChartCard, ColumnChart, Legend, Meter, StackedBar, StatTile } from "@/components/stats/charts";
+import { ScoreScatter } from "@/components/stats/scatter";
 import type { Selection } from "@/components/stats/titles-sheet";
 import {
   AGREEMENT_LABELS,
@@ -77,6 +78,7 @@ export function ScoresTab({
   calibration: Calibration;
   onSelect: (selection: Selection) => void;
 }) {
+  const { open } = useOverlay();
   const p = React.useMemo(() => raterProfile(rows), [rows]);
   const gaps = React.useMemo(() => disagreements(rows), [rows]);
 
@@ -196,6 +198,13 @@ export function ScoresTab({
           )}
         </ChartCard>
       </div>
+
+      <ChartCard
+        title="Toi contre la communauté"
+        description="Un point par titre : ta note (verticale) contre la moyenne AniList (horizontale). Au-dessus de la diagonale, tu as noté plus haut."
+      >
+        <ScoreScatter rows={rows} onSelect={(r) => open({ type: "detail", key: r.key })} />
+      </ChartCard>
 
       <ChartCard
         title="Tes notes sur une base commune"
