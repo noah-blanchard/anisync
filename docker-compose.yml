@@ -1,0 +1,15 @@
+services:
+  anisync:
+    build: .
+    image: anisync:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/anisync.db
+    ports:
+      - "3000:3000"
+    volumes:
+      - anisync-data:/data
+
+volumes:
+  anisync-data:
