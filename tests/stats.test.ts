@@ -11,7 +11,6 @@ import {
   EMPTY_FILTERS,
   generosityLevel,
   groupBy,
-  medalOf,
   overview,
   pearson,
   popularityBuckets,
@@ -20,10 +19,10 @@ import {
   raterProfile,
   records,
   tasteRows,
-  traits,
   untappedGroups,
   type StatsFilters,
 } from "@/lib/stats/gold";
+import { medalOf, traits } from "@/lib/stats/profile";
 import type { RawAniListEntry, RawMalEntry, RawMedia } from "@/lib/stats/raw";
 import { filterFor, mergeFilters, parseStatsParams, statsSearch } from "@/lib/stats/url";
 import { buildRows, calibrate, fuzzyDate, lengthOf, malDate, REFERENCE_MEAN, tagCategories } from "@/lib/stats/silver";
@@ -105,6 +104,8 @@ function row(extra: Partial<StatsRow> = {}): StatsRow {
     isAdult: false,
     isSequel: false,
     airing: "FINISHED",
+    airedFrom: null,
+    airedTo: null,
     startedAt: null,
     completedAt: null,
     addedAt: null,
@@ -241,6 +242,7 @@ describe("gold: filters", () => {
     expect(applyFilters(rows, f({ studios: ["Ghibli"] })).map((r) => r.key)).toEqual(["c"]);
     expect(applyFilters(rows, f({ tags: ["Isekai"] })).map((r) => r.key)).toEqual(["a"]);
     expect(applyFilters(rows, f({ scoreMin: 5 })).map((r) => r.key)).toEqual(["a"]);
+    expect(applyFilters(rows, f({ completedYears: [2024] }))).toEqual([]);
     expect(activeFilterCount(f({ genres: ["A", "B"], scoreMin: 5, scoreMax: 9 }))).toBe(3);
   });
 
@@ -450,6 +452,7 @@ describe("url state", () => {
       studios: ["Studio, Inc."],
       decades: [1990],
       lengths: ["film"],
+      completedYears: [2024],
       scoreMin: 7,
     };
     const search = statsSearch(filters, "scores");

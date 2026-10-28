@@ -529,7 +529,7 @@ export async function fetchBoosterPage(
 
 export const STATS_MEDIA_BATCH = 50;
 
-const STATS_MEDIA_FIELDS = `id idMal format status episodes duration season seasonYear startDate { year }
+const STATS_MEDIA_FIELDS = `id idMal format status episodes duration season seasonYear startDate { year month day } endDate { year month day }
       source countryOfOrigin isAdult genres averageScore meanScore popularity
       tags { name rank category isMediaSpoiler isGeneralSpoiler }
       studios(isMain: true) { nodes { name } }
