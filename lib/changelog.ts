@@ -9,6 +9,19 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.6.0",
+    date: "2026-10-28",
+    title: "Stats",
+    changes: [
+      "Nouvelle page Stats : temps passé, statuts, activité par année, abandons et records de ta liste.",
+      "Goûts : genres et tags par nombre, heures, note moyenne, affinité ou écart avec la communauté, plus tes combinaisons favorites et les genres à creuser.",
+      "Notes : ton profil de noteur (générosité, amplitude, accord avec la communauté), la distribution de tes notes et leur traduction sur une base commune.",
+      "Catalogue : formats, longueurs, décennies, années, saisons, sources, studios, pays et popularité.",
+      "Profil : ton type de spectateur sur sept axes, avec des médailles bronze, argent et or.",
+      "Filtres par statut, genre, tag, note, format, décennie, source, studio et pays ; touche une barre pour voir les titres.",
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-10-28",
     title: "Des boosters illustrés",
