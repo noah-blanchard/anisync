@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { EmptyChart } from "@/components/stats/charts";
+import { useElementWidth } from "@/hooks/use-element-width";
 import { formatDecimal } from "@/lib/stats/labels";
 import type { StatsRow } from "@/lib/stats/types";
 
@@ -15,25 +16,12 @@ function jitter(key: string, salt: number): number {
   return ((h >>> 0) / 4294967295) * 2 - 1;
 }
 
-function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
-  const ref = React.useRef<T>(null);
-  const [width, setWidth] = React.useState(0);
-  React.useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry!.contentRect.width));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width];
-}
-
 /**
  * My score against AniList's average, one dot per title. Above the diagonal, I rated it higher.
  * Hover a dot for its title, click it for the detail.
  */
 export function ScoreScatter({ rows, onSelect }: { rows: StatsRow[]; onSelect: (row: StatsRow) => void }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
+  const [ref, width] = useElementWidth<HTMLDivElement>();
   const [active, setActive] = React.useState<string | null>(null);
   const points = React.useMemo(
     () =>

@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, SparklesIcon } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 import { Cover } from "@/components/entry-bits";
 import { BarList, ChartCard, ColumnChart, EmptyChart, StackedBar, StatTile } from "@/components/stats/charts";
@@ -50,6 +51,7 @@ export function OverviewTab({
   taste,
   onSelect,
   onTab,
+  wrappedHref,
 }: {
   /** Filtered rows, titles to watch included */
   rows: StatsRow[];
@@ -57,6 +59,8 @@ export function OverviewTab({
   taste: StatsRow[];
   onSelect: (selection: Selection) => void;
   onTab: (tab: StatsTab) => void;
+  /** The Wrapped page of this list */
+  wrappedHref: string;
 }) {
   const openTitle = useOpenTitle();
   const o = React.useMemo(() => overview(rows), [rows]);
@@ -66,16 +70,27 @@ export function OverviewTab({
   const genres = React.useMemo(() => groupBy(taste, "genre").slice(0, 6), [taste]);
   const inProgress = o.byStatus.watching + o.byStatus.rewatching + o.byStatus.on_hold;
   const days = o.minutes / 1440;
+  const lastYear = years.at(-1)?.year;
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="flex flex-col gap-1 rounded-3xl border border-border bg-card p-5 md:p-6">
-        <p className="text-sm text-muted-foreground">Temps passé devant tes animes</p>
-        <p className="text-5xl font-semibold tracking-tight md:text-6xl">{formatHours(o.minutes)}</p>
-        <p className="text-sm text-muted-foreground">
-          soit {formatDecimal(Math.round(days * 10) / 10)} jours non-stop · {plural(o.episodes, "épisode")}
-          {o.rewatches > 0 ? ` · ${plural(o.rewatches, "revisionnage")}` : ""}
-        </p>
+      <section className="flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-border bg-card p-5 md:p-6">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-muted-foreground">Temps passé devant tes animes</p>
+          <p className="text-5xl font-semibold tracking-tight md:text-6xl">{formatHours(o.minutes)}</p>
+          <p className="text-sm text-muted-foreground">
+            soit {formatDecimal(Math.round(days * 10) / 10)} jours non-stop · {plural(o.episodes, "épisode")}
+            {o.rewatches > 0 ? ` · ${plural(o.rewatches, "revisionnage")}` : ""}
+          </p>
+        </div>
+        {lastYear !== undefined ? (
+          <Button asChild>
+            <Link href={`${wrappedHref}?year=${lastYear}`}>
+              <SparklesIcon />
+              Ton Wrapped {lastYear}
+            </Link>
+          </Button>
+        ) : null}
       </section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">

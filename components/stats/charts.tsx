@@ -396,6 +396,62 @@ export function StackedBar({
 }
 
 // ---------------------------------------------------------------------------
+// Two segments side by side
+// ---------------------------------------------------------------------------
+
+export interface PairedItem {
+  id: string;
+  label: string;
+  a: number;
+  b: number;
+}
+
+/** One row per item with two bars: segment A (--viz-1) on top, segment B (--viz-2) below. */
+export function PairedBarList({
+  items,
+  format,
+  series,
+}: {
+  items: PairedItem[];
+  format: (value: number) => string;
+  series: [string, string];
+}) {
+  if (items.length === 0) return <EmptyChart>Pas assez de données</EmptyChart>;
+  const max = Math.max(...items.flatMap((i) => [i.a, i.b]), Number.EPSILON);
+  return (
+    <div className="flex flex-col gap-3">
+      <Legend
+        series={[
+          { label: series[0], color: "var(--viz-1)" },
+          { label: series[1], color: "var(--viz-2)" },
+        ]}
+      />
+      <ul className="flex flex-col gap-2.5">
+        {items.map((item) => (
+          <li key={item.id} className="flex flex-col gap-1">
+            <span className="truncate text-sm">{item.label}</span>
+            {(["a", "b"] as const).map((side) => (
+              <span key={side} className="flex items-center gap-2">
+                <span aria-hidden className="relative h-2 flex-1">
+                  <span
+                    className={cn("absolute inset-y-0 left-0 rounded-r-[4px]", side === "a" ? "bg-viz-1" : "bg-viz-2")}
+                    style={{ width: `${Math.max((item[side] / max) * 100, item[side] > 0 ? 0.5 : 0)}%` }}
+                  />
+                </span>
+                <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                  <span className="sr-only">{series[side === "a" ? 0 : 1]} : </span>
+                  {format(item[side])}
+                </span>
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Meters and medals
 // ---------------------------------------------------------------------------
 
@@ -405,12 +461,16 @@ export function Meter({
   poles,
   centered = false,
   label,
+  tone = "a",
 }: {
   value: number;
   poles?: [string, string];
   centered?: boolean;
   label: string;
+  /** "b" draws in the second series colour (compared segment) */
+  tone?: "a" | "b";
 }) {
+  const fill = tone === "a" ? "bg-viz-1" : "bg-viz-2";
   const v = Math.min(100, Math.max(0, value));
   return (
     <div className="flex flex-col gap-1.5">
@@ -420,18 +480,18 @@ export function Meter({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(v)}
-        className="relative h-2 w-full rounded-[4px] bg-viz-track"
+        className={cn("relative h-2 w-full rounded-[4px]", tone === "a" ? "bg-viz-track" : "bg-muted")}
       >
         {centered ? (
           <>
             <span
-              className={cn("absolute inset-y-0", v >= 50 ? "left-1/2 rounded-r-[4px]" : "right-1/2 rounded-l-[4px]", "bg-viz-1")}
+              className={cn("absolute inset-y-0", v >= 50 ? "left-1/2 rounded-r-[4px]" : "right-1/2 rounded-l-[4px]", fill)}
               style={{ width: `${Math.abs(v - 50)}%` }}
             />
             <span aria-hidden className="absolute inset-y-[-3px] left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-foreground/60" />
           </>
         ) : (
-          <span className="absolute inset-y-0 left-0 rounded-r-[4px] bg-viz-1" style={{ width: `${v}%` }} />
+          <span className={cn("absolute inset-y-0 left-0 rounded-r-[4px]", fill)} style={{ width: `${v}%` }} />
         )}
       </div>
       {poles ? (
