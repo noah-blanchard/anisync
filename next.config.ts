@@ -10,10 +10,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
   },
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "s4.anilist.co" },
-      { protocol: "https", hostname: "cdn.myanimelist.net" },
-    ],
+    // Covers are small CDN images already; skip the optimizer (no sharp needed in the container).
+    unoptimized: true,
   },
   async headers() {
     return [
