@@ -37,6 +37,11 @@
   /* Unfilled part of a meter: a light step of the --viz-1 ramp */
   --viz-track: #cde2fb;
   --viz-grid: #e6e7ea;
+  /* Sequential (calendar heatmap): one hue, more is darker */
+  --viz-seq-1: #b7d3f6;
+  --viz-seq-2: #6da7ec;
+  --viz-seq-3: #2a78d6;
+  --viz-seq-4: #184f95;
   --medal-bronze: #b4703e;
   --medal-silver: #8a94a6;
   --medal-gold: #c99a06;
@@ -72,6 +77,11 @@
   --viz-neutral: #55575c;
   --viz-track: #10325e;
   --viz-grid: #24272c;
+  /* On the dark surface, more is lighter */
+  --viz-seq-1: #184f95;
+  --viz-seq-2: #256abf;
+  --viz-seq-3: #3987e5;
+  --viz-seq-4: #86b6ef;
   --medal-bronze: #d08b57;
   --medal-silver: #b4bccb;
   --medal-gold: #e6b72c;

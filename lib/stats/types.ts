@@ -51,6 +51,9 @@ export interface StatsRow {
   isSequel: boolean;
   /** AniList airing status (FINISHED, RELEASING…) */
   airing: string | null;
+  /** First and last airing dates (epoch ms), null when unknown or still airing */
+  airedFrom: number | null;
+  airedTo: number | null;
   /** epoch milliseconds */
   startedAt: number | null;
   completedAt: number | null;

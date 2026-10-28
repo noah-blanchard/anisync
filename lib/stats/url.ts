@@ -6,7 +6,7 @@ import { CANONICAL_STATUSES, type CanonicalStatus } from "../mapping";
 import { EMPTY_FILTERS, type Dimension, type StatsFilters } from "./gold";
 import type { LengthBucket } from "./types";
 
-export const STATS_TABS = ["overview", "tastes", "scores", "catalog", "profile"] as const;
+export const STATS_TABS = ["overview", "time", "tastes", "scores", "catalog", "backlog", "profile"] as const;
 export type StatsTab = (typeof STATS_TABS)[number];
 
 const LENGTHS: LengthBucket[] = ["film", "short", "standard", "long", "saga"];
@@ -37,6 +37,10 @@ export function parseStatsParams(params: URLSearchParams): { filters: StatsFilte
       .map(Number)
       .filter((d) => Number.isInteger(d) && d % 10 === 0),
     lengths: params.getAll("length").filter((l): l is LengthBucket => LENGTHS.includes(l as LengthBucket)),
+    completedYears: params
+      .getAll("done")
+      .map(Number)
+      .filter((y) => Number.isInteger(y) && y > 1900),
     scoreMin: score(params.get("smin")),
     scoreMax: score(params.get("smax")),
   };
@@ -53,6 +57,7 @@ export function statsSearch(filters: StatsFilters, tab: StatsTab): string {
   if (filters.genres.length > 1 && filters.genreMode === "all") params.set("gmode", "all");
   for (const d of filters.decades) params.append("decade", String(d));
   for (const l of filters.lengths) params.append("length", l);
+  for (const y of filters.completedYears) params.append("done", String(y));
   if (filters.scoreMin !== null) params.set("smin", String(filters.scoreMin));
   if (filters.scoreMax !== null) params.set("smax", String(filters.scoreMax));
   const search = params.toString();

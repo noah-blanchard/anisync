@@ -118,6 +118,8 @@ function rowOf(
     isAdult: media?.isAdult ?? false,
     isSequel: (media?.relations?.edges ?? []).some((e) => e?.relationType && FOLLOW_UP_RELATIONS.has(e.relationType)),
     airing: media?.status ?? null,
+    airedFrom: fuzzyDate(media?.startDate),
+    airedTo: fuzzyDate(media?.endDate),
     startedAt: fuzzyDate(al?.startedAt) ?? malDate(mal?.list_status.start_date),
     completedAt: fuzzyDate(al?.completedAt) ?? malDate(mal?.list_status.finish_date),
     addedAt: al?.createdAt ? al.createdAt * 1000 : null,
