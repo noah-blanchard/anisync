@@ -51,6 +51,19 @@ export type BoosterEmblem =
   | "flame"
   | "adult";
 
+/**
+ * Artwork shown in the pack's window. Drop an image in public/boosters/ (WebP or JPEG, about 720×630,
+ * any image works: it is cropped to fill the window) and point `src` at it.
+ */
+export interface BoosterArt {
+  /** Path under public/, e.g. "/boosters/isekai.webp" */
+  src: string;
+  /** CSS object-position of the crop, e.g. "50% 30%" (default: centered) */
+  position?: string;
+  /** Title, author and licence, listed in public/boosters/CREDITS.md */
+  credit: string;
+}
+
 export interface BoosterDefinition {
   id: string;
   /** Shown on the pack and in the carousel */
@@ -63,6 +76,8 @@ export interface BoosterDefinition {
     foil: [string, string, string];
     emblem: BoosterEmblem;
   };
+  /** Optional artwork; without it the window shows the emblem on the foil */
+  art?: BoosterArt;
   /** One or several bands merged into the pool (e.g. popular titles + hidden gems) */
   filters: BoosterFilter[];
   /** Default: exclude */
@@ -77,6 +92,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     name: "Découverte",
     tagline: "Des incontournables et des pépites, un peu de tout",
     look: { foil: ["#251a60", "#5b2d9a", "#1f6fbf"], emblem: "compass" },
+    art: {
+      src: "/boosters/decouverte.webp",
+      credit: "Katsushika Hokusai, « La Grande Vague de Kanagawa » (vers 1831), domaine public",
+    },
     filters: [
       { minScore: 64, pages: 20 },
       { minScore: 77, popularity: [2_500, 40_000], sort: "SCORE_DESC", pages: 8 },
@@ -87,6 +106,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     name: "Saison en cours",
     tagline: "Ce qui sort en ce moment",
     look: { foil: ["#3b0d2e", "#d9466f", "#f59e0b"], emblem: "calendar" },
+    art: {
+      src: "/boosters/saison.webp",
+      credit: "Vassily Kandinsky, « Composition VII » (1913), domaine public",
+    },
     filters: [{ season: "current", status: ["RELEASING"], sort: "TRENDING_DESC", pages: 4 }],
     sequels: "if-prequel-in-list",
   },
@@ -95,6 +118,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     name: "Rétro",
     tagline: "Les classiques d'avant 2005",
     look: { foil: ["#3a2410", "#c2742f", "#2f6f6a"], emblem: "cassette" },
+    art: {
+      src: "/boosters/retro.webp",
+      credit: "J. M. W. Turner, « Le Naufrage du Minotaure » (vers 1810), domaine public",
+    },
     filters: [
       { years: [null, 2004], minScore: 70, formats: ["TV", "TV_SHORT", "MOVIE", "OVA"], sort: "SCORE_DESC" },
     ],
@@ -104,6 +131,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     name: "Cinéma",
     tagline: "Un film pour ce soir",
     look: { foil: ["#1a1a1a", "#b91c1c", "#d4a017"], emblem: "clapperboard" },
+    art: {
+      src: "/boosters/cinema.webp",
+      credit: "Henri Matisse, « La Femme au chapeau » (1905), domaine public",
+    },
     filters: [{ formats: ["MOVIE"], minScore: 65 }],
   },
   {
@@ -111,6 +142,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     name: "Isekai",
     tagline: "Un aller simple pour un autre monde",
     look: { foil: ["#0b3b3c", "#16a085", "#7c3aed"], emblem: "wand" },
+    art: {
+      src: "/boosters/isekai.webp",
+      credit: "Vincent van Gogh, « La Nuit étoilée » (1889), domaine public",
+    },
     filters: [{ tags: ["Isekai"], minScore: 60, pages: 6 }],
   },
   {
@@ -118,6 +153,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     name: "Frissons",
     tagline: "Horreur, mystère et thrillers psychologiques",
     look: { foil: ["#0a0f0d", "#14532d", "#6b7280"], emblem: "ghost" },
+    art: {
+      src: "/boosters/frissons.webp",
+      credit: "Edvard Munch, « Le Cri » (1893), domaine public",
+    },
     filters: [{ genres: ["Horror", "Mystery", "Psychological", "Thriller"], minScore: 62 }],
   },
   {
@@ -126,6 +165,10 @@ export const BOOSTERS: BoosterDefinition[] = [
     tagline: "Fan service assumé",
     adult: true,
     look: { foil: ["#4a0d1f", "#e11d48", "#fb7185"], emblem: "flame" },
+    art: {
+      src: "/boosters/ecchi.webp",
+      credit: "Francis Picabia, « Udnie » (1913), domaine public",
+    },
     filters: [{ genres: ["Ecchi"], minScore: 55, pages: 8 }],
   },
   {

@@ -189,6 +189,15 @@ html[data-standalone] a {
       color-mix(in oklab, var(--foil-a, #251a60) 60%, black) 100%
     );
 }
+/* Paper grain (static SVG noise) and print halftone, layered over foil and artwork. */
+.booster-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+.booster-halftone {
+  background-image: radial-gradient(rgb(0 0 0 / 0.55) 0.32cqw, transparent 0.42cqw);
+  background-size: 1.6cqw 1.6cqw;
+}
 .booster-crimp {
   background: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.24) 0 2px, rgb(0 0 0 / 0.28) 2px 5px);
 }

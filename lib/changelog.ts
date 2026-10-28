@@ -9,6 +9,15 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.5.0",
+    date: "2026-10-28",
+    title: "Des boosters illustrés",
+    changes: [
+      "Chaque paquet a son illustration, teintée à ses couleurs : Hokusai, Van Gogh, Munch, Kandinsky…",
+      "Nouveau design : grain de papier, trame d'impression, reflet sur la fenêtre et description sur le paquet.",
+    ],
+  },
+  {
     version: "1.4.1",
     date: "2026-10-28",
     title: "Boosters réparés",

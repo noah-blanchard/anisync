@@ -178,6 +178,11 @@ services, left (✕) to skip; ↶ undoes the last choice. Keyboard: `Enter` open
 - **Adding a booster** is one entry in `lib/boosters.ts`: a name, a tagline, three foil colours, an emblem and one or
   more AniList filters (genres, tags, formats, years, current season, score, popularity, country, source, episode
   count, sort). The pool, the pack art, the carousel and `/booster/<id>` follow.
+- **Pack artwork**: drop an image in `public/boosters/` (WebP or JPEG, about 720×630; any size works, it is cropped
+  to fill the window) and add `art: { src: "/boosters/<file>", credit: "…" }` to the booster, plus `position: "50% 30%"`
+  to move the crop. The image is tinted to the pack's foil, with grain and halftone on top, so any picture blends in.
+  Without `art`, the window shows the booster's emblem. The bundled artworks are public-domain paintings and prints,
+  listed in `public/boosters/CREDITS.md`.
 - Each booster has its own pool, built from AniList the first time it is opened and kept in memory for 24 h. Pools
   fill in the background one page at a time across all boosters, far below AniList's rate limit. Titles already in
   your lists, drawn recently or skipped in the last 30 days are left out; sequels and spin-offs too, unless the

@@ -162,7 +162,7 @@ export function BoosterPack({
       >
         <div className="absolute inset-[4%] top-[10%] translate-y-[4%] rounded-[10%] bg-black/50 blur-xl" aria-hidden />
         <div className="absolute inset-0 isolate overflow-hidden">
-          <PackBody booster={booster}>
+          <PackBody booster={booster} priority>
             <motion.div
               aria-hidden
               className="booster-shine pointer-events-none absolute inset-[-50%]"
