@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, CopyIcon, LogOutIcon, MonitorIcon, MoonIcon, SunIcon, type LucideIcon } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -273,7 +274,12 @@ export function SettingsView({
             <LogOutIcon />
             Se déconnecter
           </Button>
-          <span className="text-sm text-muted-foreground tabular-nums">AniSync v{version}</span>
+          <Link
+            href="/changelog"
+            className="text-sm text-muted-foreground tabular-nums underline-offset-4 hover:text-foreground hover:underline"
+          >
+            AniSync v{version} · Nouveautés
+          </Link>
         </div>
       </Section>
     </div>
