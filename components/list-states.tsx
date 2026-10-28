@@ -34,10 +34,18 @@ export function EmptyState({
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function ErrorState({
+  message,
+  onRetry,
+  title = "Impossible de charger ta liste",
+}: {
+  message: string;
+  onRetry: () => void;
+  title?: string;
+}) {
   return (
     <div role="alert" className="flex flex-col items-center gap-3 rounded-3xl border border-border px-6 py-14 text-center">
-      <p className="font-medium">Impossible de charger ta liste</p>
+      <p className="font-medium">{title}</p>
       <p className="text-sm text-muted-foreground">{message}</p>
       <Button variant="secondary" onClick={onRetry}>
         Réessayer

@@ -3,8 +3,8 @@
 import { ArrowRightIcon } from "lucide-react";
 import * as React from "react";
 import { Cover } from "@/components/entry-bits";
-import { useOverlay } from "@/components/overlay-context";
 import { BarList, ChartCard, ColumnChart, EmptyChart, StackedBar, StatTile } from "@/components/stats/charts";
+import { useOpenTitle } from "@/components/stats/open-title";
 import type { Selection } from "@/components/stats/titles-sheet";
 import { Button } from "@/components/ui/button";
 import type { CanonicalStatus } from "@/lib/mapping";
@@ -58,7 +58,7 @@ export function OverviewTab({
   onSelect: (selection: Selection) => void;
   onTab: (tab: StatsTab) => void;
 }) {
-  const { open } = useOverlay();
+  const openTitle = useOpenTitle();
   const o = React.useMemo(() => overview(rows), [rows]);
   const years = React.useMemo(() => completionsByYear(rows), [rows]);
   const d = React.useMemo(() => drops(rows), [rows]);
@@ -219,7 +219,7 @@ export function OverviewTab({
               <li key={id}>
                 <button
                   type="button"
-                  onClick={() => open({ type: "detail", key: row.key })}
+                  onClick={() => openTitle(row)}
                   className="flex w-full items-center gap-3 rounded-2xl border border-border p-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Cover src={row.cover} alt="" glow={false} sizes="48px" className="w-12 rounded-lg" />
