@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
+import { InstallButton, usePwa } from "@/components/pwa";
 import { useTheme, type ThemePreference } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,24 @@ function Section({ title, description, children }: { title: string; description?
       </div>
       {children}
     </section>
+  );
+}
+
+/**
+ * In an installed iOS app, OAuth providers open in a Safari sheet that does not share the app cookies:
+ * open the flow in Safari explicitly (tokens are stored server-side, so the app sees the result).
+ */
+function ConnectLink({ service, children, ...props }: React.ComponentProps<"a"> & { service: ServiceName }) {
+  const { standalone, platform } = usePwa();
+  const external = standalone && platform === "ios";
+  return (
+    <a
+      href={`/api/auth/${service}/connect`}
+      {...(external ? { target: "_blank", rel: "noopener" } : {})}
+      {...props}
+    >
+      {children}
+    </a>
   );
 }
 
@@ -85,7 +104,7 @@ function ConnectionCard({ service, info }: { service: (typeof SERVICES)[number];
         {info ? (
           <>
             <Button variant="outline" asChild>
-              <a href={`/api/auth/${service.id}/connect`}>Reconnecter</a>
+              <ConnectLink service={service.id}>Reconnecter</ConnectLink>
             </Button>
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={disconnect} disabled={pending}>
               Déconnecter
@@ -93,7 +112,7 @@ function ConnectionCard({ service, info }: { service: (typeof SERVICES)[number];
           </>
         ) : (
           <Button asChild>
-            <a href={`/api/auth/${service.id}/connect`}>Connecter</a>
+            <ConnectLink service={service.id}>Connecter</ConnectLink>
           </Button>
         )}
       </div>
@@ -132,16 +151,53 @@ const THEMES: { id: ThemePreference; label: string; icon: LucideIcon }[] = [
   { id: "system", label: "Système", icon: MonitorIcon },
 ];
 
+function AppSection({ appUrl, qrSvg }: { appUrl: string; qrSvg: string }) {
+  const { standalone } = usePwa();
+  return (
+    <Section
+      title="Application"
+      description="Installe AniSync sur ton téléphone pour l'ouvrir comme une app, en plein écran."
+    >
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 md:flex-row md:items-center">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <InstallButton />
+          {!standalone && (
+            <p className="hidden text-sm text-muted-foreground md:block">
+              Scanne ce QR code avec l&apos;appareil photo de ton téléphone pour ouvrir{" "}
+              <span className="font-mono text-foreground">{appUrl.replace(/^https?:\/\//, "")}</span>, puis installe
+              l&apos;app depuis là.
+            </p>
+          )}
+        </div>
+        {!standalone && (
+          <div
+            role="img"
+            aria-label={`QR code vers ${appUrl}`}
+            className="hidden size-36 shrink-0 overflow-hidden rounded-xl bg-white p-1 md:block [&>svg]:h-full [&>svg]:w-full"
+            dangerouslySetInnerHTML={{ __html: qrSvg }}
+          />
+        )}
+      </div>
+    </Section>
+  );
+}
+
 export function SettingsView({
   connections,
   redirectUris,
+  appUrl,
+  qrSvg,
   version,
 }: {
   connections: Record<ServiceName, ConnectionInfo | null>;
   redirectUris: Record<ServiceName, string>;
+  appUrl: string;
+  qrSvg: string;
   version: string;
 }) {
   const { theme, setTheme } = useTheme();
+  const { standalone, platform } = usePwa();
+  const iosApp = standalone && platform === "ios";
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -170,7 +226,15 @@ export function SettingsView({
         {SERVICES.map((service) => (
           <ConnectionCard key={service.id} service={service} info={connections[service.id]} />
         ))}
+        {iosApp && (
+          <p className="text-sm text-muted-foreground">
+            Dans l&apos;app installée sur iPhone, la connexion s&apos;ouvre dans Safari. Une fois terminée, reviens ici et
+            tire vers le bas pour actualiser.
+          </p>
+        )}
       </Section>
+
+      <AppSection appUrl={appUrl} qrSvg={qrSvg} />
 
       <Section
         title="Redirect URIs"

@@ -53,6 +53,7 @@ export function AppShell({
 
   return (
     <OverlayProvider>
+      <div aria-hidden className="status-bar-scrim" />
       <div className="min-h-dvh lg:pl-64">
         {/* Desktop sidebar */}
         <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-6 border-r border-border bg-background/80 p-4 backdrop-blur lg:flex">

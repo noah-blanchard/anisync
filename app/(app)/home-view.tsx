@@ -8,6 +8,7 @@ import { ENTRY_GRID, EntryCard } from "@/components/entry-card";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/list-states";
 import { useOverlay } from "@/components/overlay-context";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { InstallCard } from "@/components/pwa";
 import { Button } from "@/components/ui/button";
 import { useRefreshList, useList } from "@/hooks/use-list";
 import { useStableOrder } from "@/hooks/use-stable-order";
@@ -72,6 +73,8 @@ export function HomeView() {
           </>
         }
       />
+
+      <InstallCard />
 
       {isPending ? (
         <ListSkeleton />

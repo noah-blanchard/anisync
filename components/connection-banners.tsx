@@ -2,6 +2,7 @@
 
 import { AlertTriangleIcon, LinkIcon, XIcon } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { useList } from "@/hooks/use-list";
@@ -50,14 +51,34 @@ function Banner({
 /** Non-blocking banners: service not connected, AniList token expiring, list load errors. */
 export function ConnectionBanners({ connections }: { connections: Record<ServiceName, ConnectionInfo | null> }) {
   const { data } = useList();
+  const onSettings = usePathname().startsWith("/settings");
   const [dismissed, setDismissed] = React.useState<string[]>([]);
   const [now] = React.useState(() => Date.now());
   const current = data?.connections ?? connections;
   const dismiss = (id: string) => setDismissed((d) => [...d, id]);
   const banners: React.ReactNode[] = [];
 
-  for (const service of ["mal", "anilist"] as const) {
-    if (!current[service] && !dismissed.includes(`connect-${service}`)) {
+  // The settings page already shows the connection cards.
+  const missing = onSettings ? [] : (["mal", "anilist"] as const).filter((s) => !current[s]);
+  if (missing.length === 2 && !dismissed.includes("connect-all")) {
+    banners.push(
+      <Banner
+        key="connect-all"
+        tone="info"
+        onDismiss={() => dismiss("connect-all")}
+        action={
+          <Button size="sm" asChild>
+            <Link href="/settings">Connecter</Link>
+          </Button>
+        }
+      >
+        Connecte MyAnimeList et AniList pour commencer.
+      </Banner>,
+    );
+  } else if (missing.length === 1) {
+    const service = missing[0] as ServiceName;
+    const other = service === "mal" ? "anilist" : "mal";
+    if (!dismissed.includes(`connect-${service}`)) {
       banners.push(
         <Banner
           key={`connect-${service}`}
@@ -69,7 +90,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
             </Button>
           }
         >
-          {SERVICE_LABELS[service]} n&apos;est pas connecté : les modifications ne seront faites que sur l&apos;autre service.
+          {SERVICE_LABELS[service]} non connecté : les modifications iront seulement sur {SERVICE_LABELS[other]}.
         </Banner>,
       );
     }

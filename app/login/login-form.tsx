@@ -29,7 +29,13 @@ export function LoginForm() {
     setError(null);
     try {
       await api("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) });
-      router.replace(safeNext(params.get("next")));
+      const next = safeNext(params.get("next"));
+      // API routes (e.g. an OAuth "connect" opened in a new tab) need a real navigation.
+      if (next.startsWith("/api/")) {
+        window.location.assign(next);
+        return;
+      }
+      router.replace(next);
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Connexion impossible");

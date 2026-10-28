@@ -137,6 +137,34 @@
   }
 }
 
+/* Installed app: behave like a native app (no callouts/selection on chrome, no rubber-band). */
+html[data-standalone] {
+  overscroll-behavior: none;
+}
+html[data-standalone] nav,
+html[data-standalone] button,
+html[data-standalone] a {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS draws a translucent status bar over the page: keep content readable under it. */
+.status-bar-scrim {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 40;
+  height: env(safe-area-inset-top);
+  pointer-events: none;
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+/* Light theme: the status bar text stays white, so give it a dark backdrop. */
+:root:not(.dark) .status-bar-scrim {
+  background: #111318;
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {

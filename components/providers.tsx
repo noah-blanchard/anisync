@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as React from "react";
+import { PwaProvider } from "@/components/pwa";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { ApiError } from "@/lib/client-api";
@@ -24,8 +25,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <QueryClientProvider client={client}>
-        {children}
-        <Toaster />
+        <PwaProvider>
+          {children}
+          <Toaster />
+        </PwaProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );
