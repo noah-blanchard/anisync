@@ -80,6 +80,7 @@ L'app tourne dans un seul conteneur ; tout l'état est dans le volume `/data`.
 1. **Create Application** → source **Git** (GitHub) → dépôt `noah-blanchard/anisync`, branche `main`.
 2. **Build Type : Dockerfile** (chemin `Dockerfile`, contexte `.`).
 3. **Environment** : colle tes variables (cf. `.env.example`) avec `APP_URL=https://ton-domaine` et `DATABASE_PATH=/data/anisync.db`.
+   ⚠️ Ne recopie pas le `DATABASE_PATH=./data/anisync.db` de ton `.env` local : dans le conteneur, seul `/data` est inscriptible (erreur `EACCES … mkdir '/app/data'`).
 4. **Advanced → Volumes / Mounts** : ajoute un **Volume** (named volume, pas un bind mount) monté sur **`/data`**.
    Un bind mount vers un dossier de l'hôte doit être accessible en écriture par l'uid **1000** (`chown 1000:1000 <dossier>`).
 5. **Domains** : ajoute ton domaine, **port du conteneur 3000**, active **HTTPS** avec **Let's Encrypt**.

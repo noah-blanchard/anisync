@@ -11,13 +11,17 @@ type Db = BetterSQLite3Database<typeof schema>;
 const globalForDb = globalThis as unknown as { __anisyncDb?: Db };
 
 function open(): Db {
-  const file = path.resolve(getEnv().DATABASE_PATH);
+  const configured = getEnv().DATABASE_PATH;
+  const file = path.resolve(configured);
   const dir = path.dirname(file);
-  fs.mkdirSync(dir, { recursive: true });
   try {
+    fs.mkdirSync(dir, { recursive: true });
     fs.accessSync(dir, fs.constants.W_OK);
   } catch {
-    throw new Error(`Le dossier ${dir} n'est pas accessible en écriture (vérifie le volume monté sur /data)`);
+    throw new Error(
+      `DATABASE_PATH=${configured} : le dossier ${dir} n'est pas accessible en écriture. ` +
+        "En Docker, utilise DATABASE_PATH=/data/anisync.db avec un volume monté sur /data.",
+    );
   }
   const sqlite = new Database(file);
   sqlite.pragma("journal_mode = WAL");
