@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RARITIES } from "./booster";
 import { CANONICAL_STATUSES } from "./mapping";
 
 const id = z.number().int().positive();
@@ -29,3 +30,11 @@ export const entryDeleteSchema = idsSchema
 export const alignSchema = z.object({ malId: id, source: z.enum(["mal", "anilist", "max"]) });
 
 export const searchQuerySchema = z.string().trim().min(2, "Au moins 2 caractères").max(100);
+
+export const boosterSwipeSchema = z.object({
+  anilistId: id,
+  decision: z.enum(["added", "skipped"]),
+  rarity: z.enum(RARITIES),
+});
+
+export const boosterUndoSchema = z.object({ anilistId: id });

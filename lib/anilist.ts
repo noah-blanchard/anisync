@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { cleanSynopsis, type PoolItem } from "./booster";
 import { getConnection, readAccessToken, updateExtra } from "./connections";
 import { getEnv, redirectUris } from "./env";
 import { notConnected, ServiceError } from "./errors";
@@ -430,4 +431,98 @@ export async function searchAnime(q: string): Promise<SearchResult[]> {
     format: m.format ?? null,
     year: m.seasonYear ?? null,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Booster pool
+// ---------------------------------------------------------------------------
+
+const boosterSchema = z.object({
+  Page: z.object({
+    media: z.array(
+      z.object({
+        id: z.number(),
+        idMal: z.number().nullish(),
+        episodes: z.number().nullish(),
+        format: z.string().nullish(),
+        seasonYear: z.number().nullish(),
+        averageScore: z.number().nullish(),
+        popularity: z.number().nullish(),
+        isAdult: z.boolean().nullish(),
+        genres: z.array(z.string().nullish()).nullish(),
+        description: z.string().nullish(),
+        coverImage: z
+          .object({ extraLarge: z.string().nullish(), large: z.string().nullish(), color: z.string().nullish() })
+          .nullish(),
+        title: z
+          .object({ userPreferred: z.string().nullish(), romaji: z.string().nullish(), english: z.string().nullish() })
+          .nullish(),
+        relations: z.object({ edges: z.array(z.object({ relationType: z.string().nullish() }).nullish()).nullish() }).nullish(),
+      }),
+    ),
+  }),
+});
+
+export interface BoosterPageQuery {
+  page: number;
+  sort: "POPULARITY_DESC" | "SCORE_DESC";
+  isAdult: boolean;
+  minScore: number;
+  minPopularity?: number;
+  maxPopularity?: number;
+}
+
+/** A sequel or spin-off makes a poor discovery: only keep entry points into a franchise. */
+const FOLLOW_UP_RELATIONS = new Set(["PREQUEL", "PARENT"]);
+
+/** One page of booster candidates (first seasons with a MAL id, so both lists can be written). */
+export async function fetchBoosterPage(q: BoosterPageQuery): Promise<PoolItem[]> {
+  const data = await gql(
+    `query ($page: Int, $sort: [MediaSort], $adult: Boolean, $score: Int, $popMin: Int, $popMax: Int) {
+      Page(page: $page, perPage: 50) {
+        media(type: ANIME, sort: $sort, isAdult: $adult, averageScore_greater: $score,
+          popularity_greater: $popMin, popularity_lesser: $popMax,
+          format_in: [TV, TV_SHORT, MOVIE, ONA], status_in: [FINISHED, RELEASING]) {
+          id idMal episodes format seasonYear averageScore popularity isAdult genres
+          description(asHtml: false)
+          coverImage { extraLarge large color }
+          title { userPreferred romaji english }
+          relations { edges { relationType } }
+        }
+      }
+    }`,
+    {
+      page: q.page,
+      sort: [q.sort],
+      adult: q.isAdult,
+      score: q.minScore,
+      popMin: q.minPopularity ?? null,
+      popMax: q.maxPopularity ?? null,
+    },
+    boosterSchema,
+    { label: "query Page(booster)", auth: "none" },
+  );
+  const items: PoolItem[] = [];
+  for (const m of data.Page.media) {
+    const cover = m.coverImage?.extraLarge ?? m.coverImage?.large;
+    if (m.idMal == null || !cover) continue;
+    if (m.relations?.edges?.some((e) => e?.relationType && FOLLOW_UP_RELATIONS.has(e.relationType))) continue;
+    items.push({
+      anilistId: m.id,
+      malId: m.idMal,
+      title: m.title?.userPreferred ?? m.title?.romaji ?? m.title?.english ?? "Sans titre",
+      englishTitle: m.title?.english ?? null,
+      cover,
+      color: m.coverImage?.color ?? null,
+      year: m.seasonYear ?? null,
+      format: m.format ?? null,
+      episodes: normalizeTotal(m.episodes),
+      genres: (m.genres ?? []).filter((g): g is string => Boolean(g)),
+      score: m.averageScore ?? null,
+      popularity: m.popularity ?? 0,
+      synopsis: cleanSynopsis(m.description),
+      isAdult: m.isAdult ?? false,
+    });
+  }
+  return items;
 }

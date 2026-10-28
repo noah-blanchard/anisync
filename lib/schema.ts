@@ -27,5 +27,14 @@ export const idMap = sqliteTable("id_map", {
   resolvedAt: integer("resolved_at").notNull(),
 });
 
+/** One row per booster card swiped: feeds pack exclusions now and recommendations later. */
+export const boosterSwipes = sqliteTable("booster_swipes", {
+  anilistId: integer("anilist_id").primaryKey(),
+  decision: text("decision", { enum: ["added", "skipped"] }).notNull(),
+  rarity: text("rarity", { enum: ["common", "rare", "epic", "legendary"] }).notNull(),
+  /** epoch milliseconds */
+  swipedAt: integer("swiped_at").notNull(),
+});
+
 export type ConnectionRow = typeof connections.$inferSelect;
 export type IdMapRow = typeof idMap.$inferSelect;
