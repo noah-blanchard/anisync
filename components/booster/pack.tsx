@@ -4,6 +4,7 @@ import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransf
 import * as React from "react";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import type { BoosterDefinition } from "@/lib/boosters";
 import { PackBody, PackStrip, STRIP } from "./pack-art";
 
 /** Tear progress past which letting go opens the pack. */
@@ -19,10 +20,12 @@ const TILT_SPRING = { stiffness: 220, damping: 22, mass: 0.6 };
  * `torn` is controlled by the parent so the "Ouvrir" button and the keyboard open it the same way.
  */
 export function BoosterPack({
+  booster,
   torn,
   onTear,
   className,
 }: {
+  booster: BoosterDefinition;
   torn: boolean;
   onTear: () => void;
   className?: string;
@@ -148,7 +151,7 @@ export function BoosterPack({
     <div className={cn("[perspective:900px]", !tearing && !torn && "motion-safe:animate-pack-float", className)}>
       <motion.div
         role="img"
-        aria-label="Booster scellé. Glisse ton doigt de gauche à droite sur le haut du paquet pour le déchirer."
+        aria-label={`Booster ${booster.name} scellé. Glisse ton doigt de gauche à droite sur le haut pour le déchirer.`}
         className="relative aspect-[5/8] w-full touch-none select-none [container-type:inline-size]"
         style={{ rotateX, rotateY, scale }}
         onPointerDown={onPointerDown}
@@ -159,7 +162,7 @@ export function BoosterPack({
       >
         <div className="absolute inset-[4%] top-[10%] translate-y-[4%] rounded-[10%] bg-black/50 blur-xl" aria-hidden />
         <div className="absolute inset-0 isolate overflow-hidden">
-          <PackBody>
+          <PackBody booster={booster}>
             <motion.div
               aria-hidden
               className="booster-shine pointer-events-none absolute inset-[-50%]"
@@ -209,10 +212,10 @@ export function BoosterPack({
 }
 
 /** The opened pack (strip gone) used while the cards come out. */
-export function OpenedPack({ className }: { className?: string }) {
+export function OpenedPack({ booster, className }: { booster: BoosterDefinition; className?: string }) {
   return (
     <div className={cn("relative aspect-[5/8] [container-type:inline-size]", className)}>
-      <PackBody />
+      <PackBody booster={booster} />
     </div>
   );
 }

@@ -161,18 +161,32 @@ Keyboard shortcuts (desktop): `/` search, `+` on a focused card = next episode, 
 
 ## Booster packs
 
-A discovery game on the home page: tear a pack open (swipe across its top, or the "Ouvrir" button), five anime come out
-and flip one by one. Swipe right (♥) to add one as "À voir" on both services, left (✕) to skip; ↶ undoes the last choice.
-Keyboard: `Enter` opens, `←` / `→` decide, `Backspace` undoes.
+A discovery game: the home page links to **Boosters**, a carousel of themed packs. Tear one open (swipe across its
+top, or the "Ouvrir" button), five anime come out and flip one by one. Swipe right (♥) to add one as "À voir" on both
+services, left (✕) to skip; ↶ undoes the last choice. Keyboard: `Enter` opens, `←` / `→` decide, `Backspace` undoes.
 
-- Cards come from a pool of AniList titles (28 pages of popular titles and well-rated hidden gems, keeping first
-  seasons with a MAL id so both lists can be written), cached in memory for 24 h and filled in the background with
-  spaced requests. Titles already in your lists, drawn recently or
-  skipped in the last 30 days are left out.
-- Rarity per slot, the best card last: three Communes, a Rare (sometimes Épique), then the "hit" slot. The top tier,
-  **Pépite**, is a hidden gem: score ≥ 78 with fewer than 40k AniList members.
-- Ecchi and +18 titles are excluded unless "Contenu adulte" is enabled in Paramètres (per device).
-- The card source sits behind `BoosterSource` (`lib/booster-source.ts`): swapping the random pool for a recommendation
-  engine does not touch the API route or the UI. Every swipe is logged in `booster_swipes` for that purpose.
+| Booster | Content |
+|---|---|
+| Découverte | Popular titles plus well-rated hidden gems |
+| Saison en cours | This season's shows; a sequel only if you have seen what it follows |
+| Rétro | Best rated before 2005 |
+| Cinéma | Films |
+| Isekai | AniList tag Isekai |
+| Frissons | Horror, mystery, psychological, thriller |
+| Ecchi, Hentai | Only with "Contenu adulte" on (Paramètres); hentai covers can be blurred until tapped |
+
+- **Adding a booster** is one entry in `lib/boosters.ts`: a name, a tagline, three foil colours, an emblem and one or
+  more AniList filters (genres, tags, formats, years, current season, score, popularity, country, source, episode
+  count, sort). The pool, the pack art, the carousel and `/booster/<id>` follow.
+- Each booster has its own pool, built from AniList the first time it is opened and kept in memory for 24 h. Pools
+  fill in the background one page at a time across all boosters, far below AniList's rate limit. Titles already in
+  your lists, drawn recently or skipped in the last 30 days are left out; sequels and spin-offs too, unless the
+  booster allows them.
+- Rarity is relative to each booster's pool, the best card last: three Communes, a Rare (sometimes Épique), then the
+  "hit" slot. The top tier, **Pépite**, is a hidden gem: a top-25% score among the least known 30% of that pool.
+- Ecchi and +18 titles only ever appear in the two adult boosters.
+- The card source sits behind `BoosterSource` (`lib/booster-source.ts`): swapping the random pools for a
+  recommendation engine does not touch the API route or the UI. Every swipe is logged in `booster_swipes` for that
+  purpose.
 - Haptics: vibration patterns on Android; on iOS 18+ a single system tick on key moments (Safari has no vibration API).
   Everything calms down to simple fades when the device asks for reduced motion.

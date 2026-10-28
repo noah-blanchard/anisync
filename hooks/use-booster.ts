@@ -10,41 +10,50 @@ import { reportResult, useAddEntry } from "./use-entry-actions";
 import { LIST_KEY } from "./use-list";
 
 // ---------------------------------------------------------------------------
-// Preference: adult content in packs (per device, like the theme)
+// Preferences (per device, like the theme)
 // ---------------------------------------------------------------------------
 
-const ADULT_KEY = "anisync-booster-adult";
-const ADULT_EVENT = "anisync:booster-adult";
+const PREF_EVENT = "anisync:booster-pref";
 
-function readAdult(): boolean {
+function readPref(key: string, fallback: boolean): boolean {
   try {
-    return localStorage.getItem(ADULT_KEY) === "1";
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === "1";
   } catch {
-    return false;
+    return fallback;
   }
 }
 
-function subscribeAdult(onChange: () => void) {
+function subscribePrefs(onChange: () => void) {
   window.addEventListener("storage", onChange);
-  window.addEventListener(ADULT_EVENT, onChange);
+  window.addEventListener(PREF_EVENT, onChange);
   return () => {
     window.removeEventListener("storage", onChange);
-    window.removeEventListener(ADULT_EVENT, onChange);
+    window.removeEventListener(PREF_EVENT, onChange);
   };
 }
 
-export function useBoosterAdult(): [boolean, (value: boolean) => void] {
-  const adult = useSyncExternalStore(subscribeAdult, readAdult, () => false);
-  const setAdult = useCallback((value: boolean) => {
-    try {
-      localStorage.setItem(ADULT_KEY, value ? "1" : "0");
-    } catch {
-      // Private mode: the choice lasts for this page only.
-    }
-    window.dispatchEvent(new Event(ADULT_EVENT));
-  }, []);
-  return [adult, setAdult];
+function usePref(key: string, fallback: boolean): [boolean, (value: boolean) => void] {
+  const value = useSyncExternalStore(subscribePrefs, () => readPref(key, fallback), () => fallback);
+  const setValue = useCallback(
+    (next: boolean) => {
+      try {
+        localStorage.setItem(key, next ? "1" : "0");
+      } catch {
+        // Private mode: the choice lasts for this page only.
+      }
+      window.dispatchEvent(new Event(PREF_EVENT));
+    },
+    [key],
+  );
+  return [value, setValue];
 }
+
+/** Unlocks the Ecchi and Hentai boosters. */
+export const useBoosterAdult = () => usePref("anisync-booster-adult", false);
+
+/** Blurs hentai covers until the card is tapped. On by default. */
+export const useBoosterBlur = () => usePref("anisync-booster-blur", true);
 
 // ---------------------------------------------------------------------------
 // Packs
@@ -66,16 +75,20 @@ export function preloadCovers(urls: string[], timeoutMs = 8000): Promise<void> {
   return Promise.race([all.then(() => undefined), new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
 }
 
-/** Each opened pack consumes a round, so coming back to the page always shows a fresh pack. */
-let round = 0;
-export const currentRound = () => round;
-export const consumeRound = () => ++round;
+/** Each opened pack consumes a round of its booster, so coming back always shows a fresh pack. */
+const rounds = new Map<string, number>();
+export const currentRound = (pack: string) => rounds.get(pack) ?? 0;
+export const consumeRound = (pack: string) => {
+  rounds.set(pack, currentRound(pack) + 1);
+  return currentRound(pack);
+};
 
-export function boosterQuery(packRound: number, adult: boolean) {
+export function boosterQuery(pack: string, packRound: number, adult: boolean) {
   return {
-    queryKey: ["booster", packRound, adult] as const,
+    queryKey: ["booster", pack, packRound] as const,
     queryFn: async () => {
-      const { cards } = await api<{ cards: BoosterCard[] }>(`/api/booster${adult ? "?adult=1" : ""}`);
+      const params = new URLSearchParams({ pack, ...(adult ? { adult: "1" } : {}) });
+      const { cards } = await api<{ cards: BoosterCard[] }>(`/api/booster?${params}`);
       await preloadCovers(cards.map((c) => c.cover));
       return cards;
     },
@@ -89,7 +102,7 @@ export function boosterQuery(packRound: number, adult: boolean) {
 export function usePrefetchBooster() {
   const qc = useQueryClient();
   return useCallback(
-    (packRound: number, adult: boolean) => void qc.prefetchQuery(boosterQuery(packRound, adult)),
+    (pack: string, packRound: number, adult: boolean) => void qc.prefetchQuery(boosterQuery(pack, packRound, adult)),
     [qc],
   );
 }

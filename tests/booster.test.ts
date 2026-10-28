@@ -3,12 +3,15 @@ import {
   cleanSynopsis,
   drawPack,
   isAdultContent,
+  poolRarities,
   rarityOf,
   rollSlots,
   scoreOutOfTen,
+  sequelAllowed,
   type DrawContext,
   type PoolItem,
 } from "@/lib/booster";
+import { availableBoosters, BOOSTERS, boosterVariables, getBooster, seasonOf } from "@/lib/boosters";
 
 /** Deterministic rng (mulberry32) so draws are reproducible. */
 function seeded(seed: number) {
@@ -37,6 +40,7 @@ function item(id: number, score: number, popularity: number, extra: Partial<Pool
     popularity,
     synopsis: null,
     isAdult: false,
+    followUps: [],
     ...extra,
   };
 }
@@ -80,7 +84,7 @@ describe("drawPack", () => {
       const order = ["common", "rare", "epic", "legendary"];
       const ranks = pack.map((c) => order.indexOf(c.rarity));
       expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
-      expect(pack[0]).not.toHaveProperty("isAdult");
+      expect(pack[0]).not.toHaveProperty("followUps");
     }
   });
 
@@ -112,6 +116,84 @@ describe("drawPack", () => {
     expect(drawPack(pool, { ...NONE, adult: true }, seeded(2))).toHaveLength(5);
     expect(isAdultContent({ isAdult: false, genres: ["Comedy", "Ecchi"] })).toBe(true);
     expect(isAdultContent({ isAdult: false, genres: ["Comedy"] })).toBe(false);
+  });
+});
+
+describe("relative rarity", () => {
+  it("ranks against the pack's own pool", () => {
+    // 40 titles scored 60..99, the least known ones being the best rated.
+    const pool = Array.from({ length: 40 }, (_, i) => item(i + 1, 60 + i, 100_000 - i * 2_000));
+    const rarities = poolRarities(pool);
+    const count = (r: string) => [...rarities.values()].filter((x) => x === r).length;
+    expect(count("legendary") + count("epic")).toBeGreaterThanOrEqual(4);
+    expect(count("common")).toBeGreaterThan(count("rare"));
+    expect(rarities.get(1)).toBe("common");
+    expect(rarities.get(40)).toBe("legendary");
+  });
+
+  it("keeps unscored titles common and small pools on absolute thresholds", () => {
+    const fresh = Array.from({ length: 40 }, (_, i) => item(i + 1, i < 20 ? 0 : 70 + i, 50_000));
+    const rarities = poolRarities(fresh.map((f, i) => (i < 20 ? { ...f, score: null } : f)));
+    for (let id = 1; id <= 20; id++) expect(rarities.get(id)).toBe("common");
+    expect(poolRarities([item(1, 90, 300_000)]).get(1)).toBe(rarityOf({ score: 90, popularity: 300_000 }));
+  });
+});
+
+describe("sequels", () => {
+  const sequel = { followUps: [7] };
+  it("follows the booster rule", () => {
+    expect(sequelAllowed({ followUps: [] }, {})).toBe(true);
+    expect(sequelAllowed(sequel, {})).toBe(false);
+    expect(sequelAllowed(sequel, { sequels: "allow" })).toBe(true);
+    expect(sequelAllowed(sequel, { sequels: "if-prequel-in-list", seen: new Set([3]) })).toBe(false);
+    expect(sequelAllowed(sequel, { sequels: "if-prequel-in-list", seen: new Set([7]) })).toBe(true);
+  });
+
+  it("drops sequels from packs by default", () => {
+    const pool = [...POOL.slice(0, 5), item(999, 90, 1_000, { followUps: [1] })];
+    for (let seed = 0; seed < 10; seed++) {
+      expect(drawPack(pool, NONE, seeded(seed)).some((c) => c.anilistId === 999)).toBe(false);
+    }
+  });
+});
+
+describe("catalogue", () => {
+  it("has 8 boosters with unique ids, 2 of them adult", () => {
+    expect(BOOSTERS).toHaveLength(8);
+    expect(new Set(BOOSTERS.map((b) => b.id)).size).toBe(8);
+    expect(availableBoosters(false).map((b) => b.id)).not.toContain("hentai");
+    expect(availableBoosters(true)).toHaveLength(8);
+    expect(availableBoosters(false)).toHaveLength(6);
+  });
+
+  it("keeps fan service out of the other packs", () => {
+    const isekai = getBooster("isekai")!;
+    const vars = boosterVariables(isekai.filters[0]!, 1, isekai);
+    expect(vars.adult).toBe(false);
+    expect(vars.noGenres).toContain("Ecchi");
+    const ecchi = getBooster("ecchi")!;
+    expect(boosterVariables(ecchi.filters[0]!, 1, ecchi).noGenres).toBeNull();
+    expect(boosterVariables(getBooster("hentai")!.filters[0]!, 1, getBooster("hentai")!).adult).toBe(true);
+  });
+
+  it("maps filters to AniList variables", () => {
+    const retro = getBooster("retro")!;
+    const vars = boosterVariables(retro.filters[0]!, 3, retro);
+    expect(vars).toMatchObject({ page: 3, before: 20050000, after: null, sort: ["SCORE_DESC"], score: 70 });
+    const season = getBooster("saison")!;
+    const now = new Date("2026-10-28T12:00:00Z");
+    expect(boosterVariables(season.filters[0]!, 1, season, now)).toMatchObject({
+      season: "FALL",
+      seasonYear: 2026,
+      status: ["RELEASING"],
+    });
+    expect(seasonOf(new Date("2027-01-05T00:00:00Z"))).toEqual({ season: "WINTER", year: 2027 });
+    expect(boosterVariables({ years: [2010, 2012], episodes: [1, 13] }, 1, {})).toMatchObject({
+      after: 20099999,
+      before: 20130000,
+      epMin: 0,
+      epMax: 14,
+    });
   });
 });
 

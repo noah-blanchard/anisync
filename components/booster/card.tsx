@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   CircleIcon,
   DiamondIcon,
+  EyeOffIcon,
   GemIcon,
   InfoIcon,
   SparklesIcon,
@@ -56,12 +57,14 @@ export function CardBack({ className }: { className?: string }) {
 function CardFront({
   card,
   shine,
+  blurred,
   details,
   onDetails,
   priority,
 }: {
   card: BoosterCard;
   shine: MotionValue<number>;
+  blurred: boolean;
   details: boolean;
   onDetails?: (open: boolean) => void;
   priority?: boolean;
@@ -82,8 +85,16 @@ function CardFront({
             sizes="(min-width: 640px) 330px, 80vw"
             priority={priority}
             draggable={false}
-            className="object-cover"
+            className={cn("object-cover transition-[filter,scale] duration-300", blurred && "scale-110 blur-2xl")}
           />
+          {blurred && (
+            <div className="absolute inset-0 grid place-items-center p-[6cqw]">
+              <span className="inline-flex items-center gap-[1.6cqw] rounded-full bg-black/60 px-[3.6cqw] py-[1.6cqw] text-center text-[3.9cqw] font-medium text-white">
+                <EyeOffIcon className="size-[4.4cqw] shrink-0" aria-hidden />
+                Touche pour afficher
+              </span>
+            </div>
+          )}
           {card.rarity !== "common" && (
             <motion.div
               aria-hidden
@@ -180,6 +191,7 @@ export function BoosterCardView({
   flip,
   shine,
   reduced,
+  blurred = false,
   details = false,
   onDetails,
   priority,
@@ -189,6 +201,8 @@ export function BoosterCardView({
   flip: MotionValue<number>;
   shine: MotionValue<number>;
   reduced: boolean;
+  /** Hentai cover hidden behind a blur until tapped */
+  blurred?: boolean;
   details?: boolean;
   onDetails?: (open: boolean) => void;
   priority?: boolean;
@@ -205,7 +219,14 @@ export function BoosterCardView({
     >
       <motion.div className="absolute inset-0 transform-3d" style={{ rotateY }}>
         <motion.div className="absolute inset-0 backface-hidden [&>div]:h-full" style={{ opacity: frontOpacity }}>
-          <CardFront card={card} shine={shine} details={details} onDetails={onDetails} priority={priority} />
+          <CardFront
+            card={card}
+            shine={shine}
+            blurred={blurred}
+            details={details}
+            onDetails={onDetails}
+            priority={priority}
+          />
         </motion.div>
         <motion.div
           aria-hidden
