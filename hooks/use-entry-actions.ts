@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import { useOverlay } from "@/components/overlay-context";
 import { api, ApiError, type ListPayload, type WriteResult } from "@/lib/client-api";
-import { SERVICE_LABELS } from "@/lib/labels";
+import { SERVICE_LABELS, STATUS_LABELS } from "@/lib/labels";
 import {
   applyPatch,
   buildStepPatch,
@@ -84,6 +84,49 @@ export function reportResult(result: WriteResult, retry: (targets: ServiceName[]
       : `${verb} impossible (${failed.map((s) => SERVICE_LABELS[s]).join(", ")}) : ${reason}`;
   toast.error(message, { action: { label: "Réessayer", onClick: () => retry(failed) }, duration: 8000 });
   return false;
+}
+
+export interface AddTarget {
+  anilistId: number;
+  malId: number | null;
+  title: string;
+}
+
+export interface AddVars {
+  target: AddTarget;
+  status: CanonicalStatus;
+  targets?: ServiceName[];
+}
+
+/** Adds an anime that is not in the list yet (search results, booster cards) on both services. */
+export function useAddEntry({ onAdded, quiet = false }: { onAdded?: (vars: AddVars) => void; quiet?: boolean } = {}) {
+  const qc = useQueryClient();
+  const add = useMutation<WriteResult, Error, AddVars>({
+    mutationFn: ({ target, status, targets }) =>
+      api<WriteResult>("/api/entry", {
+        method: "POST",
+        body: JSON.stringify({
+          malId: target.malId ?? undefined,
+          anilistId: target.anilistId,
+          patch: { status },
+          targets,
+        }),
+      }),
+    onSuccess: (res, vars) => {
+      const ok = reportResult(res, (targets) => add.mutate({ ...vars, targets }), `Ajout de ${vars.target.title}`);
+      if (res.mal.ok || res.anilist.ok) {
+        onAdded?.(vars);
+        void qc.invalidateQueries({ queryKey: LIST_KEY });
+        void qc.invalidateQueries({ queryKey: ["search"] });
+      }
+      if (ok && !quiet) toast.success(`${vars.target.title} ajouté (${STATUS_LABELS[vars.status]})`);
+    },
+    onError: (error, vars) =>
+      toast.error(`Ajout de ${vars.target.title} impossible : ${error.message}`, {
+        action: { label: "Réessayer", onClick: () => add.mutate(vars) },
+      }),
+  });
+  return add;
 }
 
 export function useEntryActions(key: string) {
