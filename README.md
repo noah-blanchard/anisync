@@ -99,7 +99,22 @@ Create a **Compose** app pointing at the repository: `docker-compose.yml` declar
 docker compose up -d --build
 ```
 
-## 4. Backup
+## 4. Install it on your phone
+
+AniSync is an installable PWA: full screen, home-screen icon, native-like startup screen, offline page.
+
+- **Fastest way**: on your computer, open **Paramètres → Application** and scan the QR code with your phone's camera.
+- **iPhone (Safari)**: tap **Installer l'app** on the home screen card (or in Paramètres) for a step-by-step guide: Share → **Sur l'écran d'accueil** → Ajouter. Installation must be done from Safari.
+- **Android (Chrome, Edge, Samsung Internet)**: **Installer l'app** opens the native install prompt; otherwise use the browser menu ⋮ → **Installer l'application**.
+- **Desktop (Chrome / Edge)**: the install icon in the address bar, or **Installer l'app** in Paramètres.
+
+Notes:
+- The installed app keeps its own session: log in once inside it.
+- On iPhone, connect MAL / AniList from the installed app: the OAuth flow opens in Safari (tokens are stored server-side), then come back and pull down to refresh. Doing it once from any browser is enough.
+- The service worker never caches the API or pages, so the data is always live; it only caches hashed assets and icons, and shows an offline page without network.
+- Long-press the app icon for shortcuts (En cours, Ajouter, Bibliothèque) on Android and desktop.
+
+## 5. Backup
 
 All state is in **`/data/anisync.db`** (encrypted tokens + id mapping cache). The lists themselves stay on MAL and AniList.
 
@@ -117,7 +132,7 @@ If your Dokploy version offers volume backups, schedule one on the volume mounte
 
 To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.db-wal` / `-shm`), restart. Keep the same `APP_SECRET`, otherwise the tokens are unreadable.
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
