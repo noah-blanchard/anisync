@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  docker:
+    name: Docker image boots and serves
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t anisync:ci .
+
+      - name: Fails fast without configuration
+        run: |
+          set +e
+          output=$(docker run --rm anisync:ci 2>&1)
+          code=$?
+          set -e
+          echo "$output"
+          test "$code" -ne 0
+          echo "$output" | grep -q "Configuration invalide"
+
+      - name: Start container
+        run: |
+          docker volume create anisync-ci
+          docker run -d --name anisync -p 3000:3000 \
+            -e APP_URL=http://localhost:3000 \
+            -e APP_PASSWORD=ci-password \
+            -e APP_SECRET="$(openssl rand -hex 32)" \
+            -e MAL_CLIENT_ID=ci -e ANILIST_CLIENT_ID=ci -e ANILIST_CLIENT_SECRET=ci \
+            -v anisync-ci:/data \
+            anisync:ci
+
+      - name: Wait for healthy
+        run: |
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' anisync)
+            echo "health: $status"
+            [ "$status" = "healthy" ] && exit 0
+            sleep 3
+          done
+          docker logs anisync
+          exit 1
+
+      - name: Smoke test
+        run: |
+          set -eux
+          curl -fsS http://localhost:3000/api/health | grep -q '"ok":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/list)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/login)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+            -d '{"password":"wrong"}' http://localhost:3000/api/auth/login)" = "401"
+          curl -fsS -c cookies.txt -X POST -H 'Content-Type: application/json' \
+            -d '{"password":"ci-password"}' http://localhost:3000/api/auth/login
+          curl -fsS -b cookies.txt http://localhost:3000/api/list | grep -q '"entries"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b cookies.txt http://localhost:3000/settings)" = "200"
+          docker exec anisync test -s /data/anisync.db
+          test "$(docker exec anisync id -u)" != "0"
+
+      - name: Logs
+        if: always()
+        run: docker logs anisync || true
