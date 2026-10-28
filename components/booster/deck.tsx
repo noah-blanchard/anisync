@@ -53,6 +53,7 @@ interface DeckCardProps {
   faceUp: boolean;
   slow: boolean;
   reduced: boolean;
+  blur: boolean;
   details: boolean;
   returning: SwipeDir | null;
   onDetails: (open: boolean) => void;
@@ -67,6 +68,7 @@ function DeckCard({
   faceUp,
   slow,
   reduced,
+  blur,
   details,
   returning,
   onDetails,
@@ -74,6 +76,8 @@ function DeckCard({
   onFlipped,
   onSwipe,
 }: DeckCardProps) {
+  const [uncovered, setUncovered] = React.useState(false);
+  const blurred = blur && card.isAdult && !uncovered;
   const isTop = depth === 0;
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -224,7 +228,8 @@ function DeckCard({
         onPointerLeave={() => animate(pointer, 0.5, { duration: 0.4 })}
         onTap={(e) => {
           if (!ready || (e.target instanceof Element && e.target.closest("button"))) return;
-          if (card.synopsis) onDetails(!details);
+          if (blurred) setUncovered(true);
+          else if (card.synopsis) onDetails(!details);
         }}
         animate={
           isTop && stage === "charging" && card.rarity === "legendary" && !reduced
@@ -237,6 +242,7 @@ function DeckCard({
           flip={flip}
           shine={shine}
           reduced={reduced}
+          blurred={blurred}
           details={isTop && details}
           onDetails={ready ? onDetails : undefined}
           priority={depth < 2}
@@ -273,6 +279,7 @@ export function Deck({
   returning,
   details,
   reduced,
+  blur,
   onDetails,
   onCharge,
   onFlipped,
@@ -285,6 +292,7 @@ export function Deck({
   returning: { id: number; dir: SwipeDir } | null;
   details: boolean;
   reduced: boolean;
+  blur: boolean;
   onDetails: (open: boolean) => void;
   onCharge: (card: BoosterCard, seconds: number) => void;
   onFlipped: (card: BoosterCard) => void;
@@ -301,6 +309,7 @@ export function Deck({
           faceUp={revealed.has(card.anilistId)}
           slow={index + depth === cards.length - 1 && isHit(card.rarity)}
           reduced={reduced}
+          blur={blur}
           details={details}
           returning={returning?.id === card.anilistId ? returning.dir : null}
           onDetails={onDetails}

@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { cleanSynopsis, type PoolItem } from "./booster";
+import { boosterVariables, type BoosterDefinition, type BoosterFilter } from "./boosters";
 import { getConnection, readAccessToken, updateExtra } from "./connections";
 import { getEnv, redirectUris } from "./env";
 import { notConnected, ServiceError } from "./errors";
@@ -439,6 +440,7 @@ export async function searchAnime(q: string): Promise<SearchResult[]> {
 
 const boosterSchema = z.object({
   Page: z.object({
+    pageInfo: z.object({ hasNextPage: z.boolean().nullish() }).nullish(),
     media: z.array(
       z.object({
         id: z.number(),
@@ -457,56 +459,60 @@ const boosterSchema = z.object({
         title: z
           .object({ userPreferred: z.string().nullish(), romaji: z.string().nullish(), english: z.string().nullish() })
           .nullish(),
-        relations: z.object({ edges: z.array(z.object({ relationType: z.string().nullish() }).nullish()).nullish() }).nullish(),
+        relations: z
+          .object({
+            edges: z
+              .array(
+                z.object({ relationType: z.string().nullish(), node: z.object({ id: z.number() }).nullish() }).nullish(),
+              )
+              .nullish(),
+          })
+          .nullish(),
       }),
     ),
   }),
 });
 
-export interface BoosterPageQuery {
-  page: number;
-  sort: "POPULARITY_DESC" | "SCORE_DESC";
-  isAdult: boolean;
-  minScore: number;
-  minPopularity?: number;
-  maxPopularity?: number;
-}
+const BOOSTER_QUERY = `
+query ($page: Int, $sort: [MediaSort], $adult: Boolean, $score: Int, $popMin: Int, $popMax: Int,
+  $genres: [String], $noGenres: [String], $tags: [String], $noTags: [String], $formats: [MediaFormat],
+  $status: [MediaStatus], $after: FuzzyDateInt, $before: FuzzyDateInt, $season: MediaSeason, $seasonYear: Int,
+  $country: CountryCode, $source: [MediaSource], $epMin: Int, $epMax: Int) {
+  Page(page: $page, perPage: 50) {
+    pageInfo { hasNextPage }
+    media(type: ANIME, sort: $sort, isAdult: $adult, averageScore_greater: $score,
+      popularity_greater: $popMin, popularity_lesser: $popMax, genre_in: $genres, genre_not_in: $noGenres,
+      tag_in: $tags, tag_not_in: $noTags, format_in: $formats, status_in: $status,
+      startDate_greater: $after, startDate_lesser: $before, season: $season, seasonYear: $seasonYear,
+      countryOfOrigin: $country, source_in: $source, episodes_greater: $epMin, episodes_lesser: $epMax) {
+      id idMal episodes format seasonYear averageScore popularity isAdult genres
+      description(asHtml: false)
+      coverImage { extraLarge large color }
+      title { userPreferred romaji english }
+      relations { edges { relationType node { id } } }
+    }
+  }
+}`;
 
-/** A sequel or spin-off makes a poor discovery: only keep entry points into a franchise. */
+/** Relations that make a title a follow-up: a sequel or a spin-off. */
 const FOLLOW_UP_RELATIONS = new Set(["PREQUEL", "PARENT"]);
-
-/** One page of booster candidates (first seasons with a MAL id, so both lists can be written). */
-export async function fetchBoosterPage(q: BoosterPageQuery): Promise<PoolItem[]> {
-  const data = await gql(
-    `query ($page: Int, $sort: [MediaSort], $adult: Boolean, $score: Int, $popMin: Int, $popMax: Int) {
-      Page(page: $page, perPage: 50) {
-        media(type: ANIME, sort: $sort, isAdult: $adult, averageScore_greater: $score,
-          popularity_greater: $popMin, popularity_lesser: $popMax,
-          format_in: [TV, TV_SHORT, MOVIE, ONA], status_in: [FINISHED, RELEASING]) {
-          id idMal episodes format seasonYear averageScore popularity isAdult genres
-          description(asHtml: false)
-          coverImage { extraLarge large color }
-          title { userPreferred romaji english }
-          relations { edges { relationType } }
-        }
-      }
-    }`,
-    {
-      page: q.page,
-      sort: [q.sort],
-      adult: q.isAdult,
-      score: q.minScore,
-      popMin: q.minPopularity ?? null,
-      popMax: q.maxPopularity ?? null,
-    },
-    boosterSchema,
-    { label: "query Page(booster)", auth: "none" },
-  );
+/** One page of booster candidates with a MAL id (so both lists can be written). */
+export async function fetchBoosterPage(
+  filter: BoosterFilter,
+  page: number,
+  booster: Pick<BoosterDefinition, "adult" | "isAdult">,
+): Promise<{ items: PoolItem[]; hasNextPage: boolean }> {
+  const data = await gql(BOOSTER_QUERY, boosterVariables(filter, page, booster), boosterSchema, {
+    label: "query Page(booster)",
+    auth: "none",
+  });
   const items: PoolItem[] = [];
   for (const m of data.Page.media) {
     const cover = m.coverImage?.extraLarge ?? m.coverImage?.large;
     if (m.idMal == null || !cover) continue;
-    if (m.relations?.edges?.some((e) => e?.relationType && FOLLOW_UP_RELATIONS.has(e.relationType))) continue;
+    const followUps = (m.relations?.edges ?? [])
+      .filter((e) => e?.relationType && FOLLOW_UP_RELATIONS.has(e.relationType) && e.node)
+      .map((e) => e!.node!.id);
     items.push({
       anilistId: m.id,
       malId: m.idMal,
@@ -522,7 +528,8 @@ export async function fetchBoosterPage(q: BoosterPageQuery): Promise<PoolItem[]>
       popularity: m.popularity ?? 0,
       synopsis: cleanSynopsis(m.description),
       isAdult: m.isAdult ?? false,
+      followUps,
     });
   }
-  return items;
+  return { items, hasNextPage: data.Page.pageInfo?.hasNextPage ?? data.Page.media.length === 50 };
 }

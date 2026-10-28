@@ -9,6 +9,19 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.4.0",
+    date: "2026-10-28",
+    title: "8 boosters",
+    changes: [
+      "Nouvelle page Boosters : fais défiler les paquets et choisis celui à ouvrir.",
+      "Six boosters thématiques : Découverte, Saison en cours, Rétro, Cinéma, Isekai et Frissons, chacun avec son look.",
+      "Avec le contenu adulte activé, deux boosters de plus : Ecchi et Hentai. Les autres restent tout public.",
+      "Les raretés se calculent dans chaque booster : chaque paquet a ses propres pépites.",
+      "Saison en cours propose une suite seulement si tu as vu la saison d'avant.",
+      "Option pour flouter les couvertures hentai jusqu'à ce que tu touches la carte.",
+    ],
+  },
+  {
     version: "1.3.0",
     date: "2026-10-28",
     title: "Boosters",

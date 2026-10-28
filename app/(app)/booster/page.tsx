@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { BoosterView } from "./booster-view";
+import { CatalogView } from "./catalog-view";
 
-export const metadata: Metadata = { title: "Booster" };
+export const metadata: Metadata = { title: "Boosters" };
 
-export default function BoosterPage() {
-  return <BoosterView />;
+export default function BoostersPage() {
+  return <CatalogView />;
 }

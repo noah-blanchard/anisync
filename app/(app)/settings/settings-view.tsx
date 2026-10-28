@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useBoosterAdult } from "@/hooks/use-booster";
+import { useBoosterAdult, useBoosterBlur } from "@/hooks/use-booster";
 import { LIST_KEY } from "@/hooks/use-list";
 import { api, type ConnectionInfo } from "@/lib/client-api";
 import { daysUntil, formatDate } from "@/lib/labels";
@@ -186,25 +186,56 @@ function AppSection({ appUrl, qrSvg }: { appUrl: string; qrSvg: string }) {
   );
 }
 
+function PrefSwitch({
+  id,
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 p-4">
+      <div className="min-w-0">
+        <Label htmlFor={id} className="leading-snug">
+          {label}
+        </Label>
+        <p id={`${id}-description`} className="mt-1 text-sm text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onChange} aria-describedby={`${id}-description`} />
+    </div>
+  );
+}
+
 function BoosterSection() {
   const [adult, setAdult] = useBoosterAdult();
+  const [blur, setBlur] = useBoosterBlur();
   return (
-    <Section title="Boosters">
-      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4">
-        <div className="min-w-0">
-          <Label htmlFor="booster-adult" className="leading-snug">
-            Contenu adulte
-          </Label>
-          <p id="booster-adult-description" className="mt-1 text-sm text-muted-foreground">
-            Inclut les animes ecchi et +18 dans les boosters. Réglage propre à cet appareil.
-          </p>
-        </div>
-        <Switch
+    <Section title="Boosters" description="Réglages propres à cet appareil.">
+      <div className="divide-y divide-border rounded-2xl border border-border bg-card">
+        <PrefSwitch
           id="booster-adult"
+          label="Contenu adulte"
+          description="Débloque les boosters Ecchi et Hentai. Les autres boosters restent tout public."
           checked={adult}
-          onCheckedChange={setAdult}
-          aria-describedby="booster-adult-description"
+          onChange={setAdult}
         />
+        {adult && (
+          <PrefSwitch
+            id="booster-blur"
+            label="Flouter les couvertures hentai"
+            description="La couverture reste floue jusqu'à ce que tu touches la carte."
+            checked={blur}
+            onChange={setBlur}
+          />
+        )}
       </div>
     </Section>
   );

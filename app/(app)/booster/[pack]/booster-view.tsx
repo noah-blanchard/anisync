@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, useAnimate, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
-import { CheckIcon, Loader2Icon, PackageOpenIcon, Undo2Icon, XIcon } from "lucide-react";
+import { CheckIcon, LayersIcon, Loader2Icon, LockIcon, PackageOpenIcon, Undo2Icon, XIcon } from "lucide-react";
 import * as React from "react";
 import { cardMeta } from "@/components/booster/card";
 import { Burst, Deck, DeckActions, isHit, type SwipeDir } from "@/components/booster/deck";
@@ -16,11 +16,13 @@ import {
   consumeRound,
   currentRound,
   useBoosterAdult,
+  useBoosterBlur,
   useBoosterSwipes,
   usePrefetchBooster,
   type Decision,
 } from "@/hooks/use-booster";
 import { RARITY_LABELS, scoreOutOfTen, type BoosterCard } from "@/lib/booster";
+import { boosterStyle, getBooster } from "@/lib/boosters";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
@@ -72,10 +74,12 @@ function ProgressDots({ total, history, index }: { total: number; history: Swipe
 
 function Recap({
   history,
+  blur,
   onAnother,
   onUndo,
 }: {
   history: Swipe[];
+  blur: boolean;
   onAnother: () => void;
   onUndo: () => void;
 }) {
@@ -109,7 +113,13 @@ function Recap({
                 decision === "added" ? "ring-2 ring-success" : "opacity-45 grayscale",
               )}
             >
-              <Image src={card.cover} alt="" fill sizes="80px" className="object-cover" />
+              <Image
+                src={card.cover}
+                alt=""
+                fill
+                sizes="80px"
+                className={cn("object-cover", blur && card.isAdult && "scale-110 blur-md")}
+              />
             </div>
             <span className="sr-only">
               {card.title} : {decision === "added" ? "ajouté" : "passé"}
@@ -127,10 +137,16 @@ function Recap({
           <PackageOpenIcon />
           Ouvrir un autre booster
         </Button>
-        <div className="flex justify-center gap-2">
+        <div className="flex flex-wrap justify-center gap-x-2">
           <Button variant="ghost" onClick={onUndo}>
             <Undo2Icon />
             Annuler le dernier choix
+          </Button>
+          <Button variant="ghost" asChild>
+            <Link href="/booster">
+              <LayersIcon />
+              Changer de booster
+            </Link>
           </Button>
           <Button variant="ghost" asChild>
             <Link href="/library">Voir ma liste</Link>
@@ -141,13 +157,19 @@ function Recap({
   );
 }
 
-export function BoosterView() {
+export function BoosterView({ packId }: { packId: string }) {
+  const booster = getBooster(packId)!;
   const reduced = useReducedMotion() ?? false;
   const [adult] = useBoosterAdult();
+  const [blur] = useBoosterBlur();
   // The preference lives in localStorage: wait for it, or the server render would fetch a pack for nothing.
   const hydrated = React.useSyncExternalStore(subscribeNothing, () => true, () => false);
-  const [packRound, setPackRound] = React.useState(currentRound);
-  const { data, error, refetch, isFetching } = useQuery({ ...boosterQuery(packRound, adult), enabled: hydrated });
+  const locked = Boolean(booster.adult) && !adult;
+  const [packRound, setPackRound] = React.useState(() => currentRound(booster.id));
+  const { data, error, refetch, isFetching } = useQuery({
+    ...boosterQuery(booster.id, packRound, adult),
+    enabled: hydrated && !locked,
+  });
   const prefetch = usePrefetchBooster();
   const { decide, undo } = useBoosterSwipes();
   const [scope, animateScope] = useAnimate<HTMLDivElement>();
@@ -174,11 +196,11 @@ export function BoosterView() {
     if (torn) return;
     setTorn(true);
     // This pack is spent: the next visit (or "another pack") gets a fresh one, fetched now.
-    prefetch(consumeRound(), adult);
+    prefetch(booster.id, consumeRound(booster.id), adult);
     void sparkle("open", originOf(stageRef.current, "top"));
     setAnnouncement("Booster ouvert");
     setTimeout(() => setPhase("waiting"), reduced ? 250 : 520);
-  }, [torn, prefetch, adult, reduced]);
+  }, [torn, prefetch, adult, reduced, booster.id]);
 
   React.useEffect(() => {
     if (phase !== "waiting" || !data) return;
@@ -264,7 +286,7 @@ export function BoosterView() {
 
   const another = React.useCallback(() => {
     deciding.current = -1;
-    setPackRound(currentRound());
+    setPackRound(currentRound(booster.id));
     setPhase("sealed");
     setTorn(false);
     setCards([]);
@@ -274,7 +296,7 @@ export function BoosterView() {
     setReturning(null);
     setDim(DIM.none);
     setAnnouncement("Nouveau booster scellé");
-  }, []);
+  }, [booster.id]);
 
   // ← / → swipe, Backspace undoes, Enter or Space opens the pack, Escape closes the synopsis.
   const keys = React.useRef({ tear, swipe, rewind, phase, details });
@@ -304,9 +326,32 @@ export function BoosterView() {
 
   const total = cards.length || 5;
 
+  if (hydrated && locked) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <LockIcon className="size-8 text-muted-foreground" aria-hidden />
+        <div>
+          <h1 className="text-xl font-semibold">Booster {booster.name} verrouillé</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Active le contenu adulte dans les paramètres pour ouvrir ce booster.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button asChild>
+            <Link href="/settings">Paramètres</Link>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href="/booster">Autres boosters</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={scope}
+      style={boosterStyle(booster)}
       className="fixed inset-0 flex flex-col overflow-hidden bg-background select-none [--card-w:min(80vw,340px,calc((100dvh-16rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))*5/7))]"
     >
       <div
@@ -324,13 +369,13 @@ export function BoosterView() {
 
       <header className="relative z-20 flex items-center gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <Button asChild variant="ghost" size="icon-lg" className="rounded-full">
-          <Link href="/" aria-label="Fermer le booster">
+          <Link href="/booster" aria-label="Fermer le booster">
             <XIcon className="size-5" />
           </Link>
         </Button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-sm font-semibold">Booster</p>
-          <p className="text-xs text-muted-foreground">Édition Découverte</p>
+          <p className="text-sm font-semibold">Booster {booster.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{booster.tagline}</p>
         </div>
         <div className="flex w-11 justify-end">
           {(phase === "deck" || phase === "recap") && <ProgressDots total={total} history={history} index={index} />}
@@ -339,16 +384,16 @@ export function BoosterView() {
 
       <main className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4">
         {phase === "recap" ? (
-          <Recap history={history} onAnother={another} onUndo={rewind} />
+          <Recap history={history} blur={blur} onAnother={another} onUndo={rewind} />
         ) : (
           <div ref={stageRef} className="relative aspect-[5/7] w-[var(--card-w)]">
             {(phase === "sealed" || phase === "waiting") && (
               <div className="absolute top-1/2 left-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2">
                 {phase === "sealed" ? (
-                  <BoosterPack key={packRound} torn={torn} onTear={tear} />
+                  <BoosterPack key={packRound} booster={booster} torn={torn} onTear={tear} />
                 ) : (
                   <div className={cn(!error && "motion-safe:animate-pulse")}>
-                    <OpenedPack className="w-full" />
+                    <OpenedPack booster={booster} className="w-full" />
                   </div>
                 )}
               </div>
@@ -364,7 +409,7 @@ export function BoosterView() {
                   animate={reduced ? { opacity: 0 } : { y: ["0%", "0%", "115%"], opacity: [1, 1, 0] }}
                   transition={reduced ? { duration: 0.3 } : { duration: 1, times: [0, 0.42, 0.85], ease: "easeIn" }}
                 >
-                  <OpenedPack className="w-full" />
+                  <OpenedPack booster={booster} className="w-full" />
                   {!reduced && (
                     <motion.div
                       className="absolute inset-x-[-10%] top-[6%] h-[22%] bg-[radial-gradient(closest-side,rgb(255_255_255/0.95),rgb(170_215_255/0.4)_55%,transparent)]"
@@ -386,6 +431,7 @@ export function BoosterView() {
                 returning={returning}
                 details={details}
                 reduced={reduced}
+                blur={blur}
                 onDetails={setDetails}
                 onCharge={onCharge}
                 onFlipped={onFlipped}
