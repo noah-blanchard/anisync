@@ -1,140 +1,145 @@
 # AniSync
 
-Suis tes animes **une seule fois** : chaque épisode +1, changement de statut ou note est écrit en même temps sur **MyAnimeList** et **AniList**.
-Application mono-utilisateur, auto-hébergée (Dokploy, Docker), en français.
+Track your anime **once**: every +1 episode, status change or score is written to **MyAnimeList** and **AniList** at the same time.
+Single-user, self-hosted (Dokploy, Docker). The interface is in French.
 
 - Next.js 15 (App Router, standalone) · Tailwind CSS v4 · shadcn/ui · TanStack Query
-- SQLite (better-sqlite3 + Drizzle, migrations automatiques au démarrage)
-- Jetons OAuth chiffrés au repos (AES-256-GCM), jamais envoyés au navigateur
-- PWA installable (iOS / Android)
+- SQLite (better-sqlite3 + Drizzle, migrations run automatically at startup)
+- OAuth tokens encrypted at rest (AES-256-GCM), never sent to the browser
+- Installable PWA (iOS / Android)
 
-## Architecture en bref
+## Architecture at a glance
 
 ```
-navigateur ──► middleware (session JWT HS256) ──► Route Handlers /api/*
-                                                   │
-                                   lib/sync.ts (cache liste 60 s, écritures parallèles)
-                                     │                       │
-                                 lib/mal.ts            lib/anilist.ts
-                     (OAuth PKCE plain, refresh)   (OAuth code, GraphQL)
-                                     │                       │
-                                     └──── SQLite /data ─────┘
-                                (connections chiffrées, id_map)
+browser ──► middleware (HS256 JWT session) ──► Route Handlers /api/*
+                                                │
+                               lib/sync.ts (60 s list cache, parallel writes)
+                                 │                       │
+                             lib/mal.ts            lib/anilist.ts
+                 (OAuth PKCE plain, refresh)   (OAuth code grant, GraphQL)
+                                 │                       │
+                                 └──── SQLite /data ─────┘
+                             (encrypted connections, id_map)
 ```
 
-- La clé canonique d'une entrée est **l'id MAL** ; les paires MAL ↔ AniList sont mises en cache dans `id_map`.
-- `lib/mapping.ts` et `lib/merge.ts` sont des fonctions pures, couvertes par les tests (`pnpm test`).
-- Une écriture part en parallèle vers les deux services (`Promise.allSettled`) ; l'UI est optimiste et annule service par service en cas d'échec.
+- The canonical key of an entry is the **MAL id**; MAL ↔ AniList id pairs are cached in `id_map`.
+- `lib/mapping.ts` and `lib/merge.ts` are pure functions covered by unit tests (`pnpm test`).
+- A write goes to both services in parallel (`Promise.allSettled`); the UI is optimistic and rolls back per service on failure.
 
 ---
 
-## 1. Développement local
+## 1. Local development
 
-Prérequis : Node.js 22+ et pnpm 11 (`npm i -g pnpm@11`).
+Requirements: Node.js 22+ and pnpm 11 (`npm i -g pnpm@11`).
 
 ```bash
 pnpm install
-cp .env.example .env.local     # puis remplis les valeurs (voir ci-dessous)
+cp .env.example .env.local     # then fill in the values (see below)
 pnpm dev                        # http://localhost:3000
 ```
 
-Variables d'environnement (toutes validées au démarrage, l'app s'arrête avec un message clair si l'une est invalide) :
+Environment variables (all validated at startup; the app exits with a clear message if one is invalid):
 
-| Variable | Rôle |
+| Variable | Purpose |
 |---|---|
-| `APP_URL` | URL publique, sans slash final (`http://localhost:3000` en local). Sert à construire les redirect URIs. |
-| `APP_PASSWORD` | Mot de passe de connexion à l'app. |
-| `APP_SECRET` | ≥ 32 caractères. Signe la session et chiffre les jetons. `openssl rand -base64 48` |
-| `MAL_CLIENT_ID` | Client ID de l'app MyAnimeList. |
-| `MAL_CLIENT_SECRET` | Optionnel : présent pour une app MAL de type « web ». |
-| `ANILIST_CLIENT_ID` / `ANILIST_CLIENT_SECRET` | Identifiants du client AniList. |
-| `DATABASE_PATH` | Fichier SQLite (`./data/anisync.db` en local, `/data/anisync.db` en prod). |
+| `APP_URL` | Public URL, no trailing slash (`http://localhost:3000` locally). Used to build the OAuth redirect URIs. |
+| `APP_PASSWORD` | Password to log into the app. |
+| `APP_SECRET` | ≥ 32 characters. Signs the session and encrypts tokens. `openssl rand -base64 48` |
+| `MAL_CLIENT_ID` | MyAnimeList app client ID. |
+| `MAL_CLIENT_SECRET` | Optional: present for a MAL app of type "web". |
+| `ANILIST_CLIENT_ID` / `ANILIST_CLIENT_SECRET` | AniList client credentials. |
+| `DATABASE_PATH` | SQLite file (`./data/anisync.db` locally, `/data/anisync.db` in production). |
 
-> ⚠️ Changer `APP_SECRET` invalide la session **et** rend illisibles les jetons stockés : il faudra reconnecter MAL et AniList.
+> ⚠️ Changing `APP_SECRET` invalidates the session **and** makes stored tokens unreadable: you will have to reconnect MAL and AniList.
 
-Scripts : `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm db:generate` (génère une migration après modification de `lib/schema.ts`).
+Scripts: `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm db:generate` (generates a migration after changing `lib/schema.ts`).
 
-## 2. Créer les clients OAuth
+## 2. Create the OAuth clients
 
 ### MyAnimeList
-1. Va sur <https://myanimelist.net/apiconfig> → **Create ID**.
-2. **App Type : `web`** (tu obtiens un Client ID **et** un Client Secret).
-3. **App Redirect URL** : `${APP_URL}/api/auth/mal/callback`
-   (ex. `https://anisync.example.com/api/auth/mal/callback`, ou `http://localhost:3000/api/auth/mal/callback` en local).
-4. Remplis les champs obligatoires (nom, description, homepage = ton `APP_URL`), puis copie `MAL_CLIENT_ID` et `MAL_CLIENT_SECRET`.
+1. Go to <https://myanimelist.net/apiconfig> → **Create ID**.
+2. **App Type: `web`** (you get a Client ID **and** a Client Secret).
+3. **App Redirect URL**: `${APP_URL}/api/auth/mal/callback`
+   (e.g. `https://anisync.example.com/api/auth/mal/callback`, or `http://localhost:3000/api/auth/mal/callback` locally).
+4. Fill in the required fields (name, description, homepage = your `APP_URL`), then copy `MAL_CLIENT_ID` and `MAL_CLIENT_SECRET`.
 
-MAL n'accepte qu'**une seule** redirect URL par client : crée un client séparé pour le dev local si besoin.
+MAL accepts **only one** redirect URL per client: create a separate client for local development if needed.
 
 ### AniList
-1. Va sur <https://anilist.co/settings/developer> → **Create New Client**.
-2. **Redirect URL** : `${APP_URL}/api/auth/anilist/callback`.
-3. Copie l'**ID** (`ANILIST_CLIENT_ID`) et le **Secret** (`ANILIST_CLIENT_SECRET`).
+1. Go to <https://anilist.co/settings/developer> → **Create New Client**.
+2. **Redirect URL**: `${APP_URL}/api/auth/anilist/callback`.
+3. Copy the **ID** (`ANILIST_CLIENT_ID`) and the **Secret** (`ANILIST_CLIENT_SECRET`).
 
-Les deux URIs exactes sont affichées (avec bouton copier) dans **Paramètres** une fois l'app lancée.
+Both exact URIs are shown (with a copy button) on the **Paramètres** (settings) page once the app is running.
 
-## 3. Déploiement sur Dokploy
+## 3. Deploying on Dokploy
 
-L'app tourne dans un seul conteneur ; tout l'état est dans le volume `/data`.
+The app runs as a single container; all state lives in the `/data` volume.
 
-### Option A : Application (Dockerfile), recommandé
-1. **Create Application** → source **Git** (GitHub) → dépôt `noah-blanchard/anisync`, branche `main`.
-2. **Build Type : Dockerfile** (chemin `Dockerfile`, contexte `.`).
-3. **Environment** : colle tes variables (cf. `.env.example`) avec `APP_URL=https://ton-domaine` et `DATABASE_PATH=/data/anisync.db`.
-   ⚠️ Ne recopie pas le `DATABASE_PATH=./data/anisync.db` de ton `.env` local : dans le conteneur, seul `/data` est inscriptible (erreur `EACCES … mkdir '/app/data'`).
-4. **Advanced → Volumes / Mounts** : ajoute un **Volume** (named volume, pas un bind mount) monté sur **`/data`**.
-   Un bind mount vers un dossier de l'hôte doit être accessible en écriture par l'uid **1000** (`chown 1000:1000 <dossier>`).
-5. **Domains** : ajoute ton domaine, **port du conteneur 3000**, active **HTTPS** avec **Let's Encrypt**.
-6. **Deploy**. Le healthcheck interroge `/api/health` ; les logs doivent afficher `[anisync] base de données prête`.
-7. Une fois le domaine actif, enregistre les redirect URIs définitives (`https://ton-domaine/api/auth/mal/callback` et `/api/auth/anilist/callback`) chez MAL et AniList.
-8. Ouvre l'app, connecte-toi, puis **Paramètres → Connecter** MyAnimeList et AniList.
+### Option A: Application (Dockerfile), recommended
+1. **Create Application** → source **Git** (GitHub) → repository `noah-blanchard/anisync`, branch `main`.
+2. **Build Type: Dockerfile** (path `Dockerfile`, context `.`).
+3. **Environment**: paste your variables (see `.env.example`) with `APP_URL=https://your-domain` and `DATABASE_PATH=/data/anisync.db`.
+   Use the runtime **Environment** section only: leave **Build-time Arguments** and **Build-time Secrets** empty. Nothing is needed at build time, and build args would bake secrets into the image.
+   ⚠️ Do not copy `DATABASE_PATH=./data/anisync.db` from your local `.env`: inside the container only `/data` is writable (error `EACCES … mkdir '/app/data'`).
+4. **Advanced → Volumes / Mounts**: add a **Volume** (named volume, not a bind mount) mounted at **`/data`**.
+   A bind mount to a host folder must be writable by uid **1000** (`chown 1000:1000 <folder>`).
+5. **Domains**: add your domain, **container port 3000**, enable **HTTPS** with **Let's Encrypt**.
+6. **Deploy**. The healthcheck hits `/api/health`; the logs should show `[anisync] base de données prête` (database ready).
+7. Once the domain is live, register the final redirect URIs (`https://your-domain/api/auth/mal/callback` and `/api/auth/anilist/callback`) with MAL and AniList.
+8. Open the app, log in, then **Paramètres → Connecter** for MyAnimeList and AniList.
 
-### Option B : Compose
-Crée une app **Compose** pointant sur le dépôt : `docker-compose.yml` déclare le service, le port 3000, le volume nommé `anisync-data:/data`, `env_file: .env` et `restart: unless-stopped`. Fournis le `.env` via l'onglet Environment de Dokploy, puis ajoute le domaine sur le port 3000.
+Environment changes only apply after a **Redeploy**.
 
-### Sans Dokploy
+### Option B: Compose
+Create a **Compose** app pointing at the repository: `docker-compose.yml` declares the service, port 3000, the named volume `anisync-data:/data`, `env_file: .env` and `restart: unless-stopped`. Provide the `.env` through Dokploy's Environment tab, then add the domain on port 3000.
+
+### Without Dokploy
 ```bash
 docker compose up -d --build
 ```
 
-## 4. Sauvegarde
+## 4. Backup
 
-Tout l'état tient dans **`/data/anisync.db`** (jetons chiffrés + cache des correspondances d'ids). Les listes elles-mêmes restent sur MAL et AniList.
+All state is in **`/data/anisync.db`** (encrypted tokens + id mapping cache). The lists themselves stay on MAL and AniList.
 
 ```bash
-# le plus sûr : arrêter, copier, redémarrer (quelques secondes)
-docker stop <conteneur>
-docker cp <conteneur>:/data/anisync.db ./anisync-$(date +%F).db
-docker start <conteneur>
+# safest: stop, copy, restart (a few seconds)
+docker stop <container>
+docker cp <container>:/data/anisync.db ./anisync-$(date +%F).db
+docker start <container>
 
-# à chaud : copier tout le dossier (la base est en mode WAL, garder .db, .db-wal et .db-shm ensemble)
-docker cp <conteneur>:/data ./anisync-backup-$(date +%F)
+# hot copy: copy the whole folder (the database is in WAL mode, keep .db, .db-wal and .db-shm together)
+docker cp <container>:/data ./anisync-backup-$(date +%F)
 ```
 
-Si ta version de Dokploy propose les sauvegardes de volumes, programme-en une sur le volume monté sur `/data`.
+If your Dokploy version offers volume backups, schedule one on the volume mounted at `/data`.
 
-Pour restaurer : arrête le conteneur, remplace `/data/anisync.db` (et supprime `anisync.db-wal` / `-shm`), redémarre. Garde le même `APP_SECRET`, sinon les jetons sont illisibles.
+To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.db-wal` / `-shm`), restart. Keep the same `APP_SECRET`, otherwise the tokens are unreadable.
 
-## 5. Dépannage
+## 5. Troubleshooting
 
-| Symptôme | Cause / solution |
+| Symptom | Cause / fix |
 |---|---|
-| L'app s'arrête au démarrage avec « Configuration invalide » | Une variable manque ou est invalide ; le message liste lesquelles. `APP_SECRET` doit faire ≥ 32 caractères, `APP_URL` doit commencer par `http(s)://`. |
-| `invalid_request` / `redirect_uri` invalide (MAL ou AniList) | L'URI enregistrée doit être **strictement identique** à celle affichée dans Paramètres (protocole, domaine, pas de slash final). Vérifie `APP_URL`. |
-| MAL : `invalid_grant` ou erreur PKCE / `code_verifier` | Le flux a expiré (10 min) ou a été lancé dans un autre navigateur : relance « Connecter ». AniSync utilise PKCE `plain` (MAL ne supporte pas S256). Pour une app de type « web », `MAL_CLIENT_SECRET` est obligatoire ; pour le type « other », laisse-le vide. |
-| MAL : `invalid_client` | Mauvais `MAL_CLIENT_ID` / secret, ou secret fourni pour une app « other ». |
-| AniList : bannière « jeton expire bientôt » ou erreur `Invalid token` | Les jetons AniList durent ~1 an sans refresh : clique **Reconnecter** (Paramètres ou bannière). |
-| Toasts « trop de requêtes » / erreurs 429 | AniList limite à ~30-90 requêtes/min. AniSync respecte `Retry-After` (2 essais max) ; attends une minute. L'alignement en masse espace ses écritures d'environ 1 s. |
-| `SQLITE_CANTOPEN` / dossier non accessible en écriture | Le volume `/data` n'est pas inscriptible par l'uid 1000 : utilise un volume nommé ou `chown 1000:1000`. |
-| Redirection vers une mauvaise URL après login / OAuth | `APP_URL` ne correspond pas au domaine public (ex. `http` au lieu de `https`). |
-| Cookie de session non conservé | En HTTPS, le cookie est `Secure` : accède à l'app via le domaine HTTPS configuré dans `APP_URL`. |
+| The app exits at startup with "Configuration invalide" | A variable is missing or invalid; the message lists which ones. `APP_SECRET` must be ≥ 32 characters, `APP_URL` must start with `http(s)://`. |
+| 502 Bad Gateway on the domain | The container is not running: check the app **Logs** in Dokploy (usually an env error or an unwritable `DATABASE_PATH`), and that the domain uses container port 3000. |
+| `EACCES … mkdir '/app/data'` | `DATABASE_PATH` is relative (local value). Set `DATABASE_PATH=/data/anisync.db` or remove it. |
+| `invalid_request` / invalid `redirect_uri` (MAL or AniList) | The registered URI must be **exactly** the one shown in Paramètres (protocol, domain, no trailing slash). Check `APP_URL`. |
+| MAL: `invalid_grant` or PKCE / `code_verifier` error | The flow expired (10 min) or was started in another browser: click "Connecter" again. AniSync uses PKCE `plain` (MAL does not support S256). For a "web" app, `MAL_CLIENT_SECRET` is required; for the "other" type, leave it empty. |
+| MAL: `invalid_client` | Wrong `MAL_CLIENT_ID` / secret, or a secret provided for an "other" app. |
+| AniList: "token expires soon" banner or `Invalid token` error | AniList tokens last ~1 year with no refresh: click **Reconnecter** (in Paramètres or the banner). |
+| "Too many requests" toasts / 429 errors | AniList allows ~30-90 requests/min. AniSync honours `Retry-After` (2 retries max); wait a minute. Bulk alignment spaces its writes by about 1 s. |
+| `SQLITE_CANTOPEN` / folder not writable | The `/data` volume is not writable by uid 1000: use a named volume or `chown 1000:1000`. |
+| Redirected to the wrong URL after login / OAuth | `APP_URL` does not match the public domain (e.g. `http` instead of `https`). |
+| Session cookie not kept | Over HTTPS the cookie is `Secure`: access the app through the HTTPS domain set in `APP_URL`. |
 
-## Fonctionnement de la synchronisation
+## How sync works
 
-- **+1** : action principale, optimiste. Un anime « À voir » passe automatiquement « En cours ». Au dernier épisode, un toast propose « Marquer comme terminé » (avec note optionnelle).
-- **Échec partiel** : toast « MAL ✓ / AniList ✗ : raison » avec **Réessayer** qui ne rejoue que le service en échec.
-- **Désynchronisé** : badge ambre ; il ouvre une comparaison MAL / AniList avec « Garder MAL », « Garder AniList » ou « Prendre le max » (progression la plus haute avec son statut, meilleure note).
-- **Tout vérifier** : liste toutes les entrées désynchronisées et propose « Aligner sur le max » en masse.
-- Un anime sans `idMal` sur AniList est marqué « AniList uniquement », et un anime absent d'AniList « MAL uniquement » ; les écritures ne vont alors que vers le service concerné.
-- Si un seul service est connecté, l'app fonctionne avec lui et affiche une bannière pour connecter l'autre.
+- **+1** is the primary action and is optimistic. An anime in "À voir" (plan to watch) automatically switches to "En cours" (watching). On the last episode, a toast offers "Marquer comme terminé" (mark as completed, with an optional score).
+- **Partial failure**: a "MAL ✓ / AniList ✗ : reason" toast with **Réessayer** (retry), which replays only the failed service.
+- **Out of sync**: an amber "Désynchronisé" badge opens a MAL / AniList side-by-side comparison with "Garder MAL", "Garder AniList" or "Prendre le max" (highest progress with its status, best score).
+- **Tout vérifier** (check all) lists every out-of-sync entry and offers a bulk "Aligner sur le max".
+- An anime with no `idMal` on AniList is marked "AniList uniquement", and one missing from AniList "MAL uniquement"; writes then only go to the service that has it.
+- If only one service is connected, the app keeps working with it and shows a banner to connect the other.
 
-Raccourcis clavier (desktop) : `/` recherche, `+` sur une carte focalisée = épisode suivant, `-` = épisode précédent.
+Keyboard shortcuts (desktop): `/` search, `+` on a focused card = next episode, `-` = previous episode.
