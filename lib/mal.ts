@@ -14,6 +14,7 @@ import {
   type EntryState,
 } from "./mapping";
 import type { MalListItem } from "./merge";
+import { rawMalEntrySchema, type RawMalEntry } from "./stats/raw";
 
 const OAUTH_BASE = "https://myanimelist.net/v1/oauth2";
 const API_BASE = "https://api.myanimelist.net/v2";
@@ -261,4 +262,24 @@ export async function deleteMalEntry(malId: number): Promise<void> {
     if (error instanceof ServiceError && error.status === 404) return;
     throw error;
   }
+}
+
+const statsPageSchema = z.object({
+  data: z.array(rawMalEntrySchema),
+  paging: z.object({ next: z.string().optional() }).nullish(),
+});
+
+/** My MAL list as MAL sends it (stats bronze): statuses, scores, and dates when set. */
+export async function fetchMalStatsEntries(): Promise<RawMalEntry[]> {
+  const items: RawMalEntry[] = [];
+  let url: string | undefined = `${API_BASE}/users/@me/animelist?fields=list_status&limit=1000&nsfw=true`;
+  for (let page = 0; url && page < 50; page++) {
+    const json = await malRequest(url, { label: "GET /users/@me/animelist(stats)" });
+    const parsed = statsPageSchema.safeParse(json);
+    if (!parsed.success) throw new ServiceError("mal", 502, "Liste MAL invalide");
+    items.push(...parsed.data.data);
+    const next = parsed.data.paging?.next;
+    url = next && next.startsWith(API_BASE) ? next : undefined;
+  }
+  return items;
 }

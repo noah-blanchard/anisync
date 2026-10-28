@@ -1,0 +1,102 @@
+/**
+ * Stats page state in the URL (shareable, survives back / forward): filters and tab.
+ * Pure, unit-tested in tests/stats.test.ts.
+ */
+import { CANONICAL_STATUSES, type CanonicalStatus } from "../mapping";
+import { EMPTY_FILTERS, type Dimension, type StatsFilters } from "./gold";
+import type { LengthBucket } from "./types";
+
+export const STATS_TABS = ["overview", "tastes", "scores", "catalog", "profile"] as const;
+export type StatsTab = (typeof STATS_TABS)[number];
+
+const LENGTHS: LengthBucket[] = ["film", "short", "standard", "long", "saga"];
+
+type ListKey = "genres" | "tags" | "formats" | "sources" | "studios" | "countries";
+const LIST_PARAMS: [ListKey, string][] = [
+  ["genres", "genre"],
+  ["tags", "tag"],
+  ["formats", "format"],
+  ["sources", "source"],
+  ["studios", "studio"],
+  ["countries", "country"],
+];
+
+function score(value: string | null): number | null {
+  if (value === null) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
+}
+
+export function parseStatsParams(params: URLSearchParams): { filters: StatsFilters; tab: StatsTab } {
+  const filters: StatsFilters = {
+    ...EMPTY_FILTERS,
+    statuses: params.getAll("status").filter((s): s is CanonicalStatus => CANONICAL_STATUSES.includes(s as CanonicalStatus)),
+    genreMode: params.get("gmode") === "all" ? "all" : "any",
+    decades: params
+      .getAll("decade")
+      .map(Number)
+      .filter((d) => Number.isInteger(d) && d % 10 === 0),
+    lengths: params.getAll("length").filter((l): l is LengthBucket => LENGTHS.includes(l as LengthBucket)),
+    scoreMin: score(params.get("smin")),
+    scoreMax: score(params.get("smax")),
+  };
+  for (const [key, param] of LIST_PARAMS) filters[key] = params.getAll(param).filter(Boolean);
+  const tab = params.get("tab");
+  return { filters, tab: STATS_TABS.includes(tab as StatsTab) ? (tab as StatsTab) : "overview" };
+}
+
+export function statsSearch(filters: StatsFilters, tab: StatsTab): string {
+  const params = new URLSearchParams();
+  if (tab !== "overview") params.set("tab", tab);
+  for (const s of filters.statuses) params.append("status", s);
+  for (const [key, param] of LIST_PARAMS) for (const v of filters[key]) params.append(param, v);
+  if (filters.genres.length > 1 && filters.genreMode === "all") params.set("gmode", "all");
+  for (const d of filters.decades) params.append("decade", String(d));
+  for (const l of filters.lengths) params.append("length", l);
+  if (filters.scoreMin !== null) params.set("smin", String(filters.scoreMin));
+  if (filters.scoreMax !== null) params.set("smax", String(filters.scoreMax));
+  const search = params.toString();
+  return search ? `?${search}` : "";
+}
+
+/** The filter that narrows the page to one value of a dimension (null when the dimension has no filter). */
+export function filterFor(dimension: Dimension, value: string): Partial<StatsFilters> | null {
+  switch (dimension) {
+    case "genre":
+      return { genres: [value] };
+    case "tag":
+      return { tags: [value] };
+    case "studio":
+      return { studios: [value] };
+    case "format":
+      return { formats: [value] };
+    case "source":
+      return { sources: [value] };
+    case "country":
+      return { countries: [value] };
+    case "decade":
+      return { decades: [Number(value)] };
+    case "length":
+      return { lengths: [value as LengthBucket] };
+    case "status":
+      return { statuses: [value as CanonicalStatus] };
+    case "score":
+      return { scoreMin: Number(value), scoreMax: Number(value) };
+    default:
+      return null;
+  }
+}
+
+/** Adds a filter to the current ones (list values are appended once). */
+export function mergeFilters(current: StatsFilters, extra: Partial<StatsFilters>): StatsFilters {
+  const next: StatsFilters = { ...current };
+  for (const [key, value] of Object.entries(extra) as [keyof StatsFilters, StatsFilters[keyof StatsFilters]][]) {
+    if (Array.isArray(value)) {
+      const list = current[key] as unknown[];
+      (next as unknown as Record<string, unknown>)[key] = [...list, ...value.filter((v) => !list.includes(v))];
+    } else {
+      (next as unknown as Record<string, unknown>)[key] = value;
+    }
+  }
+  return next;
+}

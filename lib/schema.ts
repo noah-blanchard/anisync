@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export interface ConnectionExtra {
   /** AniList mediaListOptions.scoreFormat */
@@ -35,6 +35,29 @@ export const boosterSwipes = sqliteTable("booster_swipes", {
   /** epoch milliseconds */
   swipedAt: integer("swiped_at").notNull(),
 });
+
+/** Stats bronze: raw AniList metadata of the anime in my list, refreshed weekly. */
+export const statsMedia = sqliteTable("stats_media", {
+  anilistId: integer("anilist_id").primaryKey(),
+  /** Raw AniList media; null = AniList returned nothing for this id */
+  payload: text("payload", { mode: "json" }).$type<unknown>(),
+  /** epoch milliseconds */
+  fetchedAt: integer("fetched_at").notNull(),
+});
+
+/** Stats bronze: raw list of each service, at most one snapshot a day (the history of the list). */
+export const listSnapshots = sqliteTable(
+  "list_snapshots",
+  {
+    service: text("service", { enum: ["mal", "anilist"] }).notNull(),
+    /** YYYY-MM-DD (UTC) */
+    day: text("day").notNull(),
+    /** epoch milliseconds */
+    fetchedAt: integer("fetched_at").notNull(),
+    payload: text("payload", { mode: "json" }).$type<unknown[]>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.service, t.day] })],
+);
 
 export type ConnectionRow = typeof connections.$inferSelect;
 export type IdMapRow = typeof idMap.$inferSelect;

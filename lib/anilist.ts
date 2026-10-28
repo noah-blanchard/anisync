@@ -18,6 +18,7 @@ import {
   type EntryState,
 } from "./mapping";
 import type { AniListListItem } from "./merge";
+import { rawAniListEntrySchema, rawMediaSchema, type RawAniListEntry, type RawMedia } from "./stats/raw";
 
 const OAUTH_BASE = "https://anilist.co/api/v2/oauth";
 const GRAPHQL_URL = "https://graphql.anilist.co";
@@ -520,4 +521,68 @@ export async function fetchBoosterPage(
     });
   }
   return { items, hasNextPage: data.Page.pageInfo?.hasNextPage ?? data.Page.media.length === 50 };
+}
+
+// ---------------------------------------------------------------------------
+// Stats (bronze: raw payloads, stored as received)
+// ---------------------------------------------------------------------------
+
+export const STATS_MEDIA_BATCH = 50;
+
+const STATS_MEDIA_FIELDS = `id idMal format status episodes duration season seasonYear startDate { year }
+      source countryOfOrigin isAdult genres averageScore meanScore popularity
+      tags { name rank category isMediaSpoiler isGeneralSpoiler }
+      studios(isMain: true) { nodes { name } }
+      relations { edges { relationType } }`;
+
+/**
+ * Metadata of up to 50 anime by AniList id (ids AniList does not know are simply absent).
+ * `adult` asks for +18 titles, which AniList may leave out otherwise.
+ */
+export async function fetchStatsMedia(ids: number[], adult = false): Promise<RawMedia[]> {
+  const data = await gql(
+    `query ($ids: [Int]) {
+      Page(perPage: ${STATS_MEDIA_BATCH}) { media(id_in: $ids, type: ANIME${adult ? ", isAdult: true" : ""}) { ${STATS_MEDIA_FIELDS} } }
+    }`,
+    { ids: ids.slice(0, STATS_MEDIA_BATCH) },
+    z.object({ Page: z.object({ media: z.array(rawMediaSchema) }) }),
+    { label: "query Page(stats media)", auth: "optional" },
+  );
+  return data.Page.media;
+}
+
+const statsListSchema = z.object({
+  MediaListCollection: z
+    .object({
+      lists: z.array(z.object({ entries: z.array(rawAniListEntrySchema).nullish() }).nullish()).nullish(),
+    })
+    .nullish(),
+});
+
+/** My AniList list with the fields the merged list leaves out: dates and rewatches. */
+export async function fetchStatsListEntries(): Promise<RawAniListEntry[]> {
+  const row = getConnection("anilist");
+  if (!row) throw notConnected("anilist");
+  const data = await gql(
+    `query ($uid: Int) {
+      MediaListCollection(userId: $uid, type: ANIME, forceSingleCompletedList: true) {
+        lists {
+          entries {
+            mediaId status score(format: POINT_100) progress repeat createdAt updatedAt
+            startedAt { year month day }
+            completedAt { year month day }
+          }
+        }
+      }
+    }`,
+    { uid: Number(row.userId) },
+    statsListSchema,
+    { label: "query MediaListCollection(stats)" },
+  );
+  // An entry appears once per custom list it belongs to.
+  const byMedia = new Map<number, RawAniListEntry>();
+  for (const list of data.MediaListCollection?.lists ?? []) {
+    for (const entry of list?.entries ?? []) if (!byMedia.has(entry.mediaId)) byMedia.set(entry.mediaId, entry);
+  }
+  return [...byMedia.values()];
 }
