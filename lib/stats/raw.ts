@@ -80,3 +80,26 @@ export const rawMalEntrySchema = z.object({
   }),
 });
 export type RawMalEntry = z.infer<typeof rawMalEntrySchema>;
+
+/** An entry of someone else's public AniList list, with the media basics the merged list would give. */
+export const rawUserEntrySchema = rawAniListEntrySchema.extend({
+  media: z.object({
+    id: z.number(),
+    idMal: z.number().nullish(),
+    episodes: z.number().nullish(),
+    format: z.string().nullish(),
+    coverImage: z.object({ large: z.string().nullish(), color: z.string().nullish() }).nullish(),
+    title: z
+      .object({ userPreferred: z.string().nullish(), romaji: z.string().nullish(), english: z.string().nullish() })
+      .nullish(),
+  }),
+});
+export type RawUserEntry = z.infer<typeof rawUserEntrySchema>;
+
+export const rawUserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  avatar: z.object({ medium: z.string().nullish() }).nullish(),
+  siteUrl: z.string().nullish(),
+});
+export type RawUser = z.infer<typeof rawUserSchema>;

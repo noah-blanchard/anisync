@@ -5,8 +5,8 @@ import { getConnectionInfos } from "../connections";
 import { getDb } from "../db";
 import { userMessage } from "../errors";
 import { fetchMalStatsEntries } from "../mal";
-import { listSnapshots, statsMedia } from "../schema";
-import { rawMediaSchema, type RawAniListEntry, type RawMalEntry, type RawMedia } from "./raw";
+import { listSnapshots, statsMedia, userSnapshots } from "../schema";
+import { rawMediaSchema, type RawAniListEntry, type RawMalEntry, type RawMedia, type RawUser, type RawUserEntry } from "./raw";
 
 /**
  * Bronze: raw MAL and AniList payloads, stored in SQLite as received.
@@ -170,9 +170,13 @@ function saveSnapshot(service: "mal" | "anilist", payload: unknown[]): void {
     .run();
 }
 
+function retentionCutoff(): string {
+  return new Date(Date.now() - DAILY_RETENTION_DAYS * 86_400_000).toISOString().slice(0, 10);
+}
+
 /** Older than the retention: keep the first snapshot of each month only. */
 function pruneSnapshots(): void {
-  const cutoff = new Date(Date.now() - DAILY_RETENTION_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const cutoff = retentionCutoff();
   const db = getDb();
   const old = db
     .select({ service: listSnapshots.service, day: listSnapshots.day })
@@ -218,4 +222,33 @@ export async function loadRawLists(options: { force?: boolean } = {}): Promise<R
 
   globalForBronze.__anisyncStatsLists = { value, expiresAt: Date.now() + LIST_TTL_MS };
   return value;
+}
+
+/** Someone else's raw list, saved as today's snapshot: the dataset for friend-based recommendations. */
+export function saveUserSnapshot(user: RawUser, entries: RawUserEntry[]): void {
+  const db = getDb();
+  const row = { userId: user.id, userName: user.name, day: today(), fetchedAt: Date.now(), payload: entries };
+  db.insert(userSnapshots)
+    .values(row)
+    .onConflictDoUpdate({
+      target: [userSnapshots.userId, userSnapshots.day],
+      set: { userName: row.userName, fetchedAt: row.fetchedAt, payload: row.payload },
+    })
+    .run();
+
+  // Same retention as my own lists: daily, then the first of each month.
+  const old = db
+    .select({ day: userSnapshots.day })
+    .from(userSnapshots)
+    .where(and(eq(userSnapshots.userId, user.id), lt(userSnapshots.day, retentionCutoff())))
+    .orderBy(userSnapshots.day)
+    .all();
+  const kept = new Set<string>();
+  for (const { day } of old) {
+    if (!kept.has(day.slice(0, 7))) {
+      kept.add(day.slice(0, 7));
+      continue;
+    }
+    db.delete(userSnapshots).where(and(eq(userSnapshots.userId, user.id), eq(userSnapshots.day, day))).run();
+  }
 }

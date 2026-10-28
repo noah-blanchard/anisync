@@ -73,7 +73,17 @@ export interface Calibration {
   translation: { score: number; count: number; percentile: number; normalized: number }[];
 }
 
+/** The AniList profile analysed, when it is not mine. */
+export interface StatsUser {
+  id: number;
+  name: string;
+  avatar: string | null;
+  url: string;
+}
+
 export interface StatsPayload {
+  /** Set when the stats are someone else's public AniList list */
+  user?: StatsUser;
   rows: StatsRow[];
   calibration: Calibration;
   /** AniList tag -> its category ("Theme-Action", "Setting-Universe"…) */

@@ -59,5 +59,21 @@ export const listSnapshots = sqliteTable(
   (t) => [primaryKey({ columns: [t.service, t.day] })],
 );
 
+/** Stats bronze: other AniList users' public lists, one snapshot a day (the friends dataset). */
+export const userSnapshots = sqliteTable(
+  "user_snapshots",
+  {
+    /** AniList user id */
+    userId: integer("user_id").notNull(),
+    userName: text("user_name").notNull(),
+    /** YYYY-MM-DD (UTC) */
+    day: text("day").notNull(),
+    /** epoch milliseconds */
+    fetchedAt: integer("fetched_at").notNull(),
+    payload: text("payload", { mode: "json" }).$type<unknown[]>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
 export type ConnectionRow = typeof connections.$inferSelect;
 export type IdMapRow = typeof idMap.$inferSelect;
