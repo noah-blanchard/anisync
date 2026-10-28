@@ -198,11 +198,21 @@ services, left (✕) to skip; ↶ undoes the last choice. Keyboard: `Enter` open
 
 ## Stats
 
-The **Stats** page (`/stats`) analyses the whole list: time spent, statuses, activity per year, drops, records,
-genres and tags, scores, catalogue (formats, length, decades, years, seasons, sources, studios, countries,
-popularity) and a viewer profile with bronze / silver / gold medals. Every bar, column and record opens the titles
-behind it, and can narrow the page to them. Filters (status, genres with any / all, tags, score range, format,
-length, decade, source, studio, country) live in the URL, so a view can be bookmarked or shared.
+The **Stats** page (`/stats`) analyses the whole list, in seven tabs:
+
+| Tab | What |
+|---|---|
+| Vue d'ensemble | Time spent, key figures, statuses, titles finished per year, drops, records |
+| Temps | Year calendar (heatmap), last 24 months (titles or estimated hours), seasonality, weekday, streaks, pace (episodes a day), simulcast vs catching up and delay after release |
+| Goûts | Genres and tags by count, hours, mean score, affinity, gap with the community or drop rate; favourite combos; untapped genres |
+| Notes | Rater profile (generosity, spread, agreement), score distribution vs community, me-vs-community scatter plot, scores on a common base, biggest disagreements |
+| Catalogue | Formats, length, decades, years, seasons, sources, studios, countries; favourite and harshest studios; popularity |
+| Backlog | Size, hours, age, time to clear it at my pace, what to watch next (AniList score adjusted by my genre affinities), oldest and forgotten titles |
+| Profil | Eleven axes (volume, finishing, curiosity, flair, era, pace, simulcast, format, franchises, backlog, generosity) and fourteen achievements, with bronze / silver / gold medals |
+
+Every bar, column, calendar day and record opens the titles behind it, and can narrow the page to them. Filters
+(status, genres with any / all, tags, score range, format, length, year finished, decade, source, studio, country)
+live in the URL, so a view can be bookmarked or shared.
 
 The data goes through three layers, bronze to gold:
 
@@ -219,4 +229,9 @@ The data goes through three layers, bronze to gold:
 - **Metadata** comes from AniList: a first visit fetches up to 300 titles before answering, the rest fills in the
   background one batch of 50 at a time, and the page polls until it is complete. Titles only on MAL count in time
   and scores but not in genres, tags or studios.
-- Everything in `silver.ts`, `gold.ts` and `url.ts` is pure and covered by `tests/stats.test.ts`.
+- **Dates.** Start and finish dates come from AniList (MAL as a fallback); airing dates from AniList. Paces above
+  16 hours of watching a day are treated as wrong dates and left out. Estimated hours per month spread each finished
+  title evenly between its start and finish dates.
+- Gold is split by theme: `gold.ts` (filters, groups, scores, records), `time.ts`, `backlog.ts` and `profile.ts`
+  (traits and achievements). Everything there and in `silver.ts` and `url.ts` is pure and covered by
+  `tests/stats.test.ts` and `tests/stats-v2.test.ts`.

@@ -9,6 +9,19 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.7.0",
+    date: "2026-10-28",
+    title: "Stats : temps, backlog et succès",
+    changes: [
+      "Nouvel onglet Temps : calendrier de l'année, 24 derniers mois, saisonnalité, jour de la semaine, séries de mois actifs, rythme de visionnage et simulcast.",
+      "Nouvel onglet Backlog : taille, âge, temps pour tout voir à ton rythme, suggestions « À regarder ensuite » selon tes genres préférés, titres oubliés.",
+      "Notes : nuage de points de tes notes face à la moyenne AniList.",
+      "Catalogue : tes studios fétiches et ceux où tu es le plus sévère.",
+      "Profil : quatre axes de plus (diffusion, format, fidélité aux sagas, backlog) et quatorze succès en bronze, argent et or.",
+      "Nouveau filtre : année de fin de visionnage.",
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-10-28",
     title: "Stats",
