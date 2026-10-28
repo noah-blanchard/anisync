@@ -3,8 +3,8 @@
 import { FilterIcon } from "lucide-react";
 import * as React from "react";
 import { Cover } from "@/components/entry-bits";
-import { useOverlay } from "@/components/overlay-context";
 import { ResponsiveOverlay } from "@/components/responsive-overlay";
+import { useOpenTitle } from "@/components/stats/open-title";
 import { Button } from "@/components/ui/button";
 import type { StatsFilters } from "@/lib/stats/gold";
 import { formatDecimal, statusLabel } from "@/lib/stats/labels";
@@ -33,13 +33,13 @@ export function TitlesSheet({
   onClose: () => void;
   onFilter: (filter: Partial<StatsFilters>) => void;
 }) {
-  const { open } = useOverlay();
+  const openTitle = useOpenTitle();
   const rows = React.useMemo(() => [...(selection?.rows ?? [])].sort(byScore), [selection]);
 
-  const openDetail = (key: string) => {
+  const openRow = (row: StatsRow) => {
     onClose();
     // Let the sheet close before the detail opens (one overlay at a time).
-    requestAnimationFrame(() => open({ type: "detail", key }));
+    requestAnimationFrame(() => openTitle(row));
   };
 
   return (
@@ -76,7 +76,7 @@ export function TitlesSheet({
             <li key={r.key}>
               <button
                 type="button"
-                onClick={() => openDetail(r.key)}
+                onClick={() => openRow(r)}
                 className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-2 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Cover src={r.cover} alt="" glow={false} sizes="40px" className="w-10 rounded-lg" />

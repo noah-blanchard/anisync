@@ -116,7 +116,7 @@ Notes:
 
 ## 5. Backup
 
-All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata and daily list snapshots). The lists themselves stay on MAL and AniList.
+All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata, daily list snapshots and the snapshots of the AniList profiles analysed). The lists themselves stay on MAL and AniList.
 
 ```bash
 # safest: stop, copy, restart (a few seconds)
@@ -213,6 +213,13 @@ The **Stats** page (`/stats`) analyses the whole list, in seven tabs:
 Every bar, column, calendar day and record opens the titles behind it, and can narrow the page to them. Filters
 (status, genres with any / all, tags, score range, format, length, year finished, decade, source, studio, country)
 live in the URL, so a view can be bookmarked or shared.
+
+**Other AniList profiles.** "Analyser un profil" searches AniList users by name and opens `/stats/u/<name>`: the
+same seven tabs on that person's public list (AniList side only), plus a "Toi et <name>" card comparing it with mine:
+titles seen by both, a compatibility score (correlation of our scores on the common base, so a generous and a harsh
+rater can still match), our biggest disagreements, our shared favourites and their favourites missing from my list.
+A title that is not in my list opens on AniList. Private profiles are refused by AniList and say so. Each profile
+analysed is also saved, one snapshot a day, in `user_snapshots`: the friends dataset for recommendations later.
 
 The data goes through three layers, bronze to gold:
 

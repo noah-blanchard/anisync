@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Cover } from "@/components/entry-bits";
 import { EmptyState } from "@/components/list-states";
-import { useOverlay } from "@/components/overlay-context";
+import { useOpenTitle } from "@/components/stats/open-title";
 import { ChartCard, ColumnChart, Legend, Meter, StackedBar, StatTile } from "@/components/stats/charts";
 import { ScoreScatter } from "@/components/stats/scatter";
 import type { Selection } from "@/components/stats/titles-sheet";
@@ -39,7 +39,7 @@ function Verdict({ name, label, children }: { name: string; label: string; child
 }
 
 function GapList({ title, rows }: { title: string; rows: (StatsRow & { gap: number })[] }) {
-  const { open } = useOverlay();
+  const openTitle = useOpenTitle();
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <h3 className="text-sm font-semibold">{title}</h3>
@@ -49,7 +49,7 @@ function GapList({ title, rows }: { title: string; rows: (StatsRow & { gap: numb
           <li key={r.key}>
             <button
               type="button"
-              onClick={() => open({ type: "detail", key: r.key })}
+              onClick={() => openTitle(r)}
               className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Cover src={r.cover} alt="" glow={false} sizes="36px" className="w-9 rounded-md" />
@@ -78,7 +78,7 @@ export function ScoresTab({
   calibration: Calibration;
   onSelect: (selection: Selection) => void;
 }) {
-  const { open } = useOverlay();
+  const openTitle = useOpenTitle();
   const p = React.useMemo(() => raterProfile(rows), [rows]);
   const gaps = React.useMemo(() => disagreements(rows), [rows]);
 
@@ -203,7 +203,7 @@ export function ScoresTab({
         title="Toi contre la communauté"
         description="Un point par titre : ta note (verticale) contre la moyenne AniList (horizontale). Au-dessus de la diagonale, tu as noté plus haut."
       >
-        <ScoreScatter rows={rows} onSelect={(r) => open({ type: "detail", key: r.key })} />
+        <ScoreScatter rows={rows} onSelect={openTitle} />
       </ChartCard>
 
       <ChartCard

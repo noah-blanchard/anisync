@@ -3,10 +3,10 @@
 import * as React from "react";
 import { Cover } from "@/components/entry-bits";
 import { EmptyState } from "@/components/list-states";
-import { useOverlay } from "@/components/overlay-context";
 import { ChartCard, ColumnChart, EmptyChart, StackedBar, StatTile } from "@/components/stats/charts";
 import { Chip } from "@/components/stats/filters";
 import { CalendarHeatmap } from "@/components/stats/heatmap";
+import { useOpenTitle } from "@/components/stats/open-title";
 import type { Selection } from "@/components/stats/titles-sheet";
 import { formatDecimal, formatInteger, formatPercent } from "@/lib/stats/labels";
 import {
@@ -40,7 +40,7 @@ function duration(days: number): string {
 }
 
 export function TimeTab({ rows, onSelect }: { rows: StatsRow[]; onSelect: (selection: Selection) => void }) {
-  const { open } = useOverlay();
+  const openTitle = useOpenTitle();
   const years = React.useMemo(() => completionYears(rows), [rows]);
   const [pickedYear, setYear] = React.useState<number | null>(null);
   const year = pickedYear !== null && years.includes(pickedYear) ? pickedYear : (years[0] ?? null);
@@ -215,7 +215,7 @@ export function TimeTab({ rows, onSelect }: { rows: StatsRow[]; onSelect: (selec
                     <li key={r.key}>
                       <button
                         type="button"
-                        onClick={() => open({ type: "detail", key: r.key })}
+                        onClick={() => openTitle(r)}
                         className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <Cover src={r.cover} alt="" glow={false} sizes="36px" className="w-9 rounded-md" />

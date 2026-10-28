@@ -4,8 +4,8 @@ import { ArrowRightIcon } from "lucide-react";
 import * as React from "react";
 import { Cover } from "@/components/entry-bits";
 import { EmptyState } from "@/components/list-states";
-import { useOverlay } from "@/components/overlay-context";
 import { BarList, ChartCard, EmptyChart, StatTile } from "@/components/stats/charts";
+import { useOpenTitle } from "@/components/stats/open-title";
 import type { Selection } from "@/components/stats/titles-sheet";
 import { Button } from "@/components/ui/button";
 import { backlogStats, FORGOTTEN_DAYS, forgotten, nextUp } from "@/lib/stats/backlog";
@@ -24,12 +24,12 @@ function since(days: number): string {
 }
 
 function TitleRow({ row, detail, value }: { row: StatsRow; detail: React.ReactNode; value?: React.ReactNode }) {
-  const { open } = useOverlay();
+  const openTitle = useOpenTitle();
   return (
     <li>
       <button
         type="button"
-        onClick={() => open({ type: "detail", key: row.key })}
+        onClick={() => openTitle(row)}
         className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-1.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Cover src={row.cover} alt="" glow={false} sizes="40px" className="w-10 rounded-lg" />

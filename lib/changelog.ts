@@ -9,6 +9,16 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.8.0",
+    date: "2026-10-28",
+    title: "Les stats de tes amis",
+    changes: [
+      "« Analyser un profil » dans Stats : cherche un pseudo AniList et retrouve toutes les stats de sa liste publique.",
+      "Toi et ton ami : compatibilité de vos goûts, vos plus gros désaccords, vos coups de cœur communs et ses favoris que tu n'as pas vus.",
+      "Les profils consultés restent dans les récents ; un titre absent de ta liste s'ouvre sur AniList.",
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-10-28",
     title: "Stats : temps, backlog et succès",

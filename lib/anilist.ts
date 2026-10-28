@@ -18,7 +18,16 @@ import {
   type EntryState,
 } from "./mapping";
 import type { AniListListItem } from "./merge";
-import { rawAniListEntrySchema, rawMediaSchema, type RawAniListEntry, type RawMedia } from "./stats/raw";
+import {
+  rawAniListEntrySchema,
+  rawMediaSchema,
+  rawUserEntrySchema,
+  rawUserSchema,
+  type RawAniListEntry,
+  type RawMedia,
+  type RawUser,
+  type RawUserEntry,
+} from "./stats/raw";
 
 const OAUTH_BASE = "https://anilist.co/api/v2/oauth";
 const GRAPHQL_URL = "https://graphql.anilist.co";
@@ -585,4 +594,53 @@ export async function fetchStatsListEntries(): Promise<RawAniListEntry[]> {
     for (const entry of list?.entries ?? []) if (!byMedia.has(entry.mediaId)) byMedia.set(entry.mediaId, entry);
   }
   return [...byMedia.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Other users (public profiles)
+// ---------------------------------------------------------------------------
+
+/** AniList users whose name matches. */
+export async function searchUsers(q: string): Promise<RawUser[]> {
+  const data = await gql(
+    `query ($q: String) { Page(perPage: 8) { users(search: $q) { id name avatar { medium } siteUrl } } }`,
+    { q },
+    z.object({ Page: z.object({ users: z.array(rawUserSchema) }) }),
+    { label: "query Page(users)", auth: "optional" },
+  );
+  return data.Page.users;
+}
+
+const userListSchema = z.object({
+  User: rawUserSchema,
+  MediaListCollection: z
+    .object({ lists: z.array(z.object({ entries: z.array(rawUserEntrySchema).nullish() }).nullish()).nullish() })
+    .nullish(),
+});
+
+/** Someone's public anime list. AniList answers 404 for an unknown name and refuses private lists. */
+export async function fetchUserList(name: string): Promise<{ user: RawUser; entries: RawUserEntry[] }> {
+  const data = await gql(
+    `query ($name: String) {
+      User(name: $name) { id name avatar { medium } siteUrl }
+      MediaListCollection(userName: $name, type: ANIME, forceSingleCompletedList: true) {
+        lists {
+          entries {
+            mediaId status score(format: POINT_100) progress repeat createdAt updatedAt
+            startedAt { year month day }
+            completedAt { year month day }
+            media { id idMal episodes format coverImage { large color } title { userPreferred romaji english } }
+          }
+        }
+      }
+    }`,
+    { name },
+    userListSchema,
+    { label: "query MediaListCollection(user)", auth: "optional" },
+  );
+  const byMedia = new Map<number, RawUserEntry>();
+  for (const list of data.MediaListCollection?.lists ?? []) {
+    for (const entry of list?.entries ?? []) if (!byMedia.has(entry.mediaId)) byMedia.set(entry.mediaId, entry);
+  }
+  return { user: data.User, entries: [...byMedia.values()] };
 }

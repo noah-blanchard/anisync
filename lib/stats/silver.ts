@@ -2,9 +2,9 @@
  * Silver: from the merged list and the raw bronze payloads to one clean row per anime.
  * Pure functions (no I/O), unit-tested in tests/stats.test.ts.
  */
-import { normalizeTotal } from "../mapping";
-import { displayState, type MergedEntry } from "../merge";
-import type { RawAniListEntry, RawMalEntry, RawMedia } from "./raw";
+import { ANILIST_STATUSES, fromAniListScore, fromAniListStatus, normalizeTotal, type AniListStatus, type EntryState } from "../mapping";
+import { displayState, entryKey, type MergedEntry } from "../merge";
+import type { RawAniListEntry, RawMalEntry, RawMedia, RawUserEntry } from "./raw";
 import type { Calibration, LengthBucket, SeasonName, StatsRow } from "./types";
 
 /** Tags below this AniList relevance rank (0-100) describe the title too loosely. */
@@ -126,6 +126,44 @@ function rowOf(
     updatedAt: entry.updatedAt > 0 ? entry.updatedAt : null,
     hasMeta: media !== undefined,
   };
+}
+
+/**
+ * Someone else's public AniList list, shaped like my merged list (AniList side only),
+ * so the same silver and gold layers apply to it.
+ */
+export function entriesFromUserList(raw: readonly RawUserEntry[]): MergedEntry[] {
+  return raw.map((e) => {
+    const status = ANILIST_STATUSES.includes(e.status as AniListStatus) ? (e.status as AniListStatus) : "PLANNING";
+    const state: EntryState = {
+      status: fromAniListStatus(status),
+      progress: Math.max(0, e.progress ?? 0),
+      score: fromAniListScore(e.score),
+      updatedAt: e.updatedAt ? e.updatedAt * 1000 : null,
+      entryId: null,
+    };
+    const m = e.media;
+    const malId = m.idMal ?? null;
+    return {
+      key: entryKey(malId, m.id),
+      malId,
+      anilistId: m.id,
+      title: m.title?.userPreferred ?? m.title?.romaji ?? m.title?.english ?? "Sans titre",
+      englishTitle: m.title?.english ?? null,
+      cover: m.coverImage?.large ?? null,
+      color: m.coverImage?.color ?? null,
+      totalEpisodes: normalizeTotal(m.episodes),
+      format: m.format ?? null,
+      nextAiring: null,
+      mal: null,
+      anilist: state,
+      availability: malId === null ? "anilist_only" : "both",
+      missingOn: null,
+      inSync: true,
+      diff: [],
+      updatedAt: state.updatedAt ?? 0,
+    };
+  });
 }
 
 /** One row per anime in my list (entries without any state are left out). */
