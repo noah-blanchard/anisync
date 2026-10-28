@@ -23,6 +23,23 @@
   --destructive: oklch(0.56 0.21 25);
   --warning: oklch(0.58 0.14 65);
   --success: oklch(0.55 0.14 155);
+
+  /* Charts: categorical slots in this fixed order (validated for colour-blind separation), never cycled */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  /* Diverging: --viz-1 above zero, --viz-negative below, --viz-neutral in between */
+  --viz-negative: #e34948;
+  --viz-neutral: #c3c2b7;
+  /* Unfilled part of a meter: a light step of the --viz-1 ramp */
+  --viz-track: #cde2fb;
+  --viz-grid: #e6e7ea;
+  --medal-bronze: #b4703e;
+  --medal-silver: #8a94a6;
+  --medal-gold: #c99a06;
 }
 
 /* Dark theme (default) */
@@ -44,6 +61,20 @@
   --destructive: oklch(0.63 0.2 25);
   --warning: oklch(0.8 0.14 75);
   --success: oklch(0.75 0.14 155);
+
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-negative: #e66767;
+  --viz-neutral: #55575c;
+  --viz-track: #10325e;
+  --viz-grid: #24272c;
+  --medal-bronze: #d08b57;
+  --medal-silver: #b4bccb;
+  --medal-gold: #e6b72c;
 }
 
 @theme inline {
@@ -68,6 +99,19 @@
   --color-warning: var(--warning);
   --color-success: var(--success);
   --color-entry-accent: var(--entry-accent);
+  --color-viz-1: var(--viz-1);
+  --color-viz-2: var(--viz-2);
+  --color-viz-3: var(--viz-3);
+  --color-viz-4: var(--viz-4);
+  --color-viz-5: var(--viz-5);
+  --color-viz-6: var(--viz-6);
+  --color-viz-negative: var(--viz-negative);
+  --color-viz-neutral: var(--viz-neutral);
+  --color-viz-track: var(--viz-track);
+  --color-viz-grid: var(--viz-grid);
+  --color-medal-bronze: var(--medal-bronze);
+  --color-medal-silver: var(--medal-silver);
+  --color-medal-gold: var(--medal-gold);
 
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 4px);

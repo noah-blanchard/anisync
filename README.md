@@ -116,7 +116,7 @@ Notes:
 
 ## 5. Backup
 
-All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history). The lists themselves stay on MAL and AniList.
+All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata and daily list snapshots). The lists themselves stay on MAL and AniList.
 
 ```bash
 # safest: stop, copy, restart (a few seconds)
@@ -195,3 +195,28 @@ services, left (✕) to skip; ↶ undoes the last choice. Keyboard: `Enter` open
   purpose.
 - Haptics: vibration patterns on Android; on iOS 18+ a single system tick on key moments (Safari has no vibration API).
   Everything calms down to simple fades when the device asks for reduced motion.
+
+## Stats
+
+The **Stats** page (`/stats`) analyses the whole list: time spent, statuses, activity per year, drops, records,
+genres and tags, scores, catalogue (formats, length, decades, years, seasons, sources, studios, countries,
+popularity) and a viewer profile with bronze / silver / gold medals. Every bar, column and record opens the titles
+behind it, and can narrow the page to them. Filters (status, genres with any / all, tags, score range, format,
+length, decade, source, studio, country) live in the URL, so a view can be bookmarked or shared.
+
+The data goes through three layers, bronze to gold:
+
+| Layer | What | Where |
+|---|---|---|
+| Bronze | Raw payloads as MAL and AniList send them: AniList metadata of every anime in the list (genres, tags, studios, duration, source, community score, popularity, relations), refreshed weekly in `stats_media`; the raw lists of both services (with start / finish dates and rewatches), one snapshot a day in `list_snapshots` (daily for 90 days, then the first of each month) | `lib/stats/bronze.ts` |
+| Silver | One clean row per anime: merged state, metadata, dates, minutes watched, and the score normalized against the whole list | `lib/stats/silver.ts` |
+| Gold | Every aggregate, pure functions run in the browser on the filtered rows, so filters apply instantly | `lib/stats/gold.ts` |
+
+- **Score normalization.** A generous rater's 8 is not a harsh rater's 8. Each score gets its rank among my ratings
+  and a value on a common base: a typical rater with a mean of 7 and a standard deviation of 1.5
+  (`7 + 1.5 × z-score`). It is computed once on the whole list, so a title keeps its value whatever the filters.
+  Generosity is measured separately, as the mean gap between my score and AniList's average on the same titles.
+- **Metadata** comes from AniList: a first visit fetches up to 300 titles before answering, the rest fills in the
+  background one batch of 50 at a time, and the page polls until it is complete. Titles only on MAL count in time
+  and scores but not in genres, tags or studios.
+- Everything in `silver.ts`, `gold.ts` and `url.ts` is pure and covered by `tests/stats.test.ts`.

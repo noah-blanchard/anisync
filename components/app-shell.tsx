@@ -1,6 +1,6 @@
 "use client";
 
-import { LibraryIcon, PlayIcon, PlusCircleIcon, SettingsIcon, type LucideIcon } from "lucide-react";
+import { ChartColumnIcon, LibraryIcon, PlayIcon, PlusCircleIcon, SettingsIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Accueil", icon: PlayIcon },
   { href: "/library", label: "Bibliothèque", icon: LibraryIcon },
+  { href: "/stats", label: "Stats", icon: ChartColumnIcon },
   { href: "/add", label: "Ajouter", icon: PlusCircleIcon },
   { href: "/settings", label: "Paramètres", icon: SettingsIcon },
 ];
@@ -107,7 +108,7 @@ export function AppShell({
           aria-label="Navigation principale"
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/85 pb-safe backdrop-blur-lg lg:hidden"
         >
-          <ul className="mx-auto grid max-w-lg grid-cols-4">
+          <ul className="mx-auto grid max-w-lg grid-cols-5">
             {NAV.map(({ href, label, icon: Icon }) => {
               const active = isActive(pathname, href);
               return (
