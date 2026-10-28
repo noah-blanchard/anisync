@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "./lib/session";
 
-const PUBLIC_PATHS = new Set(["/login", "/api/health", "/api/auth/login", "/manifest.webmanifest", "/favicon.ico"]);
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/api/health",
+  "/api/auth/login",
+  "/manifest.webmanifest",
+  "/favicon.ico",
+  "/sw.js",
+  "/offline.html",
+]);
 const PUBLIC_PREFIXES = ["/icons/", "/_next/"];
 
 function isPublic(pathname: string): boolean {
@@ -26,5 +34,5 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   runtime: "nodejs",
-  matcher: ["/((?!_next/static|_next/image|icons/|favicon.ico|icon.svg|apple-icon.png|manifest.webmanifest|robots.txt).*)"],
+  matcher: ["/((?!_next/static|_next/image|icons/|favicon.ico|manifest.webmanifest|sw.js|offline.html|robots.txt).*)"],
 };

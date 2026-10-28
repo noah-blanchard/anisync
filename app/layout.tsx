@@ -3,16 +3,26 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { Providers } from "@/components/providers";
 import { themeScript } from "@/components/theme-provider";
+import { SPLASH_SCREENS } from "@/lib/splash-screens";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "AniSync", template: "%s · AniSync" },
-  description: "Suis tes animes une seule fois, synchronisés sur MyAnimeList et AniList.",
+  description: "Tes animes à jour sur MyAnimeList et AniList, en un geste.",
   applicationName: "AniSync",
-  appleWebApp: { capable: true, title: "AniSync", statusBarStyle: "black-translucent" },
+  appleWebApp: {
+    capable: true,
+    title: "AniSync",
+    statusBarStyle: "black-translucent",
+    startupImage: SPLASH_SCREENS,
+  },
   formatDetection: { telephone: false },
   icons: {
-    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }, { url: "/icons/icon-192.png", sizes: "192x192" }],
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
   },
   robots: { index: false, follow: false },
