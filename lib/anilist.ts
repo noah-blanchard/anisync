@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { cleanSynopsis, type PoolItem } from "./booster";
-import { boosterVariables, type BoosterDefinition, type BoosterFilter } from "./boosters";
+import { boosterQuery, boosterVariables, type BoosterDefinition, type BoosterFilter } from "./boosters";
 import { getConnection, readAccessToken, updateExtra } from "./connections";
 import { getEnv, redirectUris } from "./env";
 import { notConnected, ServiceError } from "./errors";
@@ -463,7 +463,9 @@ const boosterSchema = z.object({
           .object({
             edges: z
               .array(
-                z.object({ relationType: z.string().nullish(), node: z.object({ id: z.number() }).nullish() }).nullish(),
+                z
+                  .object({ relationType: z.string().nullish(), node: z.object({ id: z.number() }).nullish() })
+                  .nullish(),
               )
               .nullish(),
           })
@@ -473,26 +475,11 @@ const boosterSchema = z.object({
   }),
 });
 
-const BOOSTER_QUERY = `
-query ($page: Int, $sort: [MediaSort], $adult: Boolean, $score: Int, $popMin: Int, $popMax: Int,
-  $genres: [String], $noGenres: [String], $tags: [String], $noTags: [String], $formats: [MediaFormat],
-  $status: [MediaStatus], $after: FuzzyDateInt, $before: FuzzyDateInt, $season: MediaSeason, $seasonYear: Int,
-  $country: CountryCode, $source: [MediaSource], $epMin: Int, $epMax: Int) {
-  Page(page: $page, perPage: 50) {
-    pageInfo { hasNextPage }
-    media(type: ANIME, sort: $sort, isAdult: $adult, averageScore_greater: $score,
-      popularity_greater: $popMin, popularity_lesser: $popMax, genre_in: $genres, genre_not_in: $noGenres,
-      tag_in: $tags, tag_not_in: $noTags, format_in: $formats, status_in: $status,
-      startDate_greater: $after, startDate_lesser: $before, season: $season, seasonYear: $seasonYear,
-      countryOfOrigin: $country, source_in: $source, episodes_greater: $epMin, episodes_lesser: $epMax) {
-      id idMal episodes format seasonYear averageScore popularity isAdult genres
+const BOOSTER_FIELDS = `id idMal episodes format seasonYear averageScore popularity isAdult genres
       description(asHtml: false)
       coverImage { extraLarge large color }
       title { userPreferred romaji english }
-      relations { edges { relationType node { id } } }
-    }
-  }
-}`;
+      relations { edges { relationType node { id } } }`;
 
 /** Relations that make a title a follow-up: a sequel or a spin-off. */
 const FOLLOW_UP_RELATIONS = new Set(["PREQUEL", "PARENT"]);
@@ -502,7 +489,8 @@ export async function fetchBoosterPage(
   page: number,
   booster: Pick<BoosterDefinition, "adult" | "isAdult">,
 ): Promise<{ items: PoolItem[]; hasNextPage: boolean }> {
-  const data = await gql(BOOSTER_QUERY, boosterVariables(filter, page, booster), boosterSchema, {
+  const variables = boosterVariables(filter, page, booster);
+  const data = await gql(boosterQuery(variables, BOOSTER_FIELDS), variables, boosterSchema, {
     label: "query Page(booster)",
     auth: "none",
   });

@@ -9,6 +9,12 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.4.1",
+    date: "2026-10-28",
+    title: "Boosters réparés",
+    changes: ["Les boosters s'ouvrent à nouveau : AniList refusait certains filtres vides."],
+  },
+  {
     version: "1.4.0",
     date: "2026-10-28",
     title: "8 boosters",

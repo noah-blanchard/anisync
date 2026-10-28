@@ -156,41 +156,93 @@ export function seasonOf(date: Date): { season: (typeof SEASONS)[number]; year: 
   return { season: SEASONS[Math.floor(date.getUTCMonth() / 3)]!, year: date.getUTCFullYear() };
 }
 
-/** GraphQL variables for one page of a booster band; unset filters stay null, which AniList ignores. */
+/** GraphQL type and Page.media argument of each booster variable. */
+const MEDIA_ARGS = {
+  page: ["Int", null],
+  sort: ["[MediaSort]", "sort"],
+  adult: ["Boolean", "isAdult"],
+  score: ["Int", "averageScore_greater"],
+  popMin: ["Int", "popularity_greater"],
+  popMax: ["Int", "popularity_lesser"],
+  genres: ["[String]", "genre_in"],
+  noGenres: ["[String]", "genre_not_in"],
+  tags: ["[String]", "tag_in"],
+  noTags: ["[String]", "tag_not_in"],
+  formats: ["[MediaFormat]", "format_in"],
+  status: ["[MediaStatus]", "status_in"],
+  after: ["FuzzyDateInt", "startDate_greater"],
+  before: ["FuzzyDateInt", "startDate_lesser"],
+  season: ["MediaSeason", "season"],
+  seasonYear: ["Int", "seasonYear"],
+  country: ["CountryCode", "countryOfOrigin"],
+  source: ["[MediaSource]", "source_in"],
+  epMin: ["Int", "episodes_greater"],
+  epMax: ["Int", "episodes_lesser"],
+} as const;
+
+export type BoosterVariables = Partial<Record<keyof typeof MEDIA_ARGS, unknown>> & { page: number };
+
+/**
+ * GraphQL variables for one page of a booster band. Only set filters are included: AniList rejects a null
+ * comparison filter ("Illegal operator and value combination") instead of ignoring it.
+ */
 export function boosterVariables(
   filter: BoosterFilter,
   page: number,
   booster: Pick<BoosterDefinition, "adult" | "isAdult">,
   now = new Date(),
-) {
+): BoosterVariables {
   const current = filter.season === "current" ? seasonOf(now) : null;
   const [yearMin, yearMax] = filter.years ?? [null, null];
   const [popMin, popMax] = filter.popularity ?? [null, null];
   const [epMin, epMax] = filter.episodes ?? [null, null];
-  return {
+  // Packs that are not adult stay free of fan service, whatever their other filters.
+  const noGenres = booster.adult ? filter.excludeGenres : [...(filter.excludeGenres ?? []), "Ecchi"];
+  const all: BoosterVariables = {
     page,
     sort: [filter.sort ?? "POPULARITY_DESC"],
     adult: booster.isAdult ?? false,
-    score: filter.minScore ?? null,
+    score: filter.minScore,
     popMin,
     popMax,
-    genres: filter.genres ?? null,
-    // Packs that are not adult stay free of fan service, whatever their other filters.
-    noGenres: booster.adult ? (filter.excludeGenres ?? null) : [...(filter.excludeGenres ?? []), "Ecchi"],
-    tags: filter.tags ?? null,
-    noTags: filter.excludeTags ?? null,
+    genres: filter.genres,
+    noGenres,
+    tags: filter.tags,
+    noTags: filter.excludeTags,
     formats: filter.formats ?? ["TV", "TV_SHORT", "MOVIE", "ONA"],
     status: filter.status ?? ["FINISHED", "RELEASING"],
     // FuzzyDateInt bounds are exclusive: YYYY0000 / (YYYY+1)0000 keep whole years.
     after: yearMin !== null ? yearMin * 10_000 - 1 : null,
     before: yearMax !== null ? (yearMax + 1) * 10_000 : null,
-    season: current?.season ?? null,
-    seasonYear: current?.year ?? null,
-    country: filter.country ?? null,
-    source: filter.source ?? null,
+    season: current?.season,
+    seasonYear: current?.year,
+    country: filter.country,
+    source: filter.source,
     epMin: epMin !== null ? epMin - 1 : null,
     epMax: epMax !== null ? epMax + 1 : null,
   };
+  const set = Object.entries(all).filter(([, value]) => value !== null && value !== undefined && !isEmptyList(value));
+  return Object.fromEntries(set) as BoosterVariables;
+}
+
+function isEmptyList(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 0;
+}
+
+/** The Page(media) query declaring only the variables actually sent. */
+export function boosterQuery(variables: BoosterVariables, fields: string): string {
+  const keys = (Object.keys(MEDIA_ARGS) as (keyof typeof MEDIA_ARGS)[]).filter((key) => key in variables);
+  const declarations = keys.map((key) => `$${key}: ${MEDIA_ARGS[key][0]}`).join(", ");
+  const args = keys
+    .filter((key) => MEDIA_ARGS[key][1] !== null)
+    .map((key) => `${MEDIA_ARGS[key][1]}: $${key}`)
+    .join(", ");
+  return `query (${declarations}) {
+  Page(page: $page, perPage: 50) {
+    pageInfo { hasNextPage }
+    media(type: ANIME, ${args}) { ${fields} }
+  }
+}`;
 }
 
 /** CSS variables consumed by the foil and card-back styles. */

@@ -11,7 +11,7 @@ import {
   type DrawContext,
   type PoolItem,
 } from "@/lib/booster";
-import { availableBoosters, BOOSTERS, boosterVariables, getBooster, seasonOf } from "@/lib/boosters";
+import { availableBoosters, BOOSTERS, boosterQuery, boosterVariables, getBooster, seasonOf } from "@/lib/boosters";
 
 /** Deterministic rng (mulberry32) so draws are reproducible. */
 function seeded(seed: number) {
@@ -172,14 +172,15 @@ describe("catalogue", () => {
     expect(vars.adult).toBe(false);
     expect(vars.noGenres).toContain("Ecchi");
     const ecchi = getBooster("ecchi")!;
-    expect(boosterVariables(ecchi.filters[0]!, 1, ecchi).noGenres).toBeNull();
+    expect(boosterVariables(ecchi.filters[0]!, 1, ecchi)).not.toHaveProperty("noGenres");
     expect(boosterVariables(getBooster("hentai")!.filters[0]!, 1, getBooster("hentai")!).adult).toBe(true);
   });
 
   it("maps filters to AniList variables", () => {
     const retro = getBooster("retro")!;
     const vars = boosterVariables(retro.filters[0]!, 3, retro);
-    expect(vars).toMatchObject({ page: 3, before: 20050000, after: null, sort: ["SCORE_DESC"], score: 70 });
+    expect(vars).toMatchObject({ page: 3, before: 20050000, sort: ["SCORE_DESC"], score: 70 });
+    expect(vars).not.toHaveProperty("after");
     const season = getBooster("saison")!;
     const now = new Date("2026-10-28T12:00:00Z");
     expect(boosterVariables(season.filters[0]!, 1, season, now)).toMatchObject({
@@ -194,6 +195,36 @@ describe("catalogue", () => {
       epMin: 0,
       epMax: 14,
     });
+  });
+});
+
+describe("AniList query", () => {
+  // AniList answers "Illegal operator and value combination" to a null comparison filter.
+  it("never sends a null filter, for every booster", () => {
+    for (const booster of BOOSTERS) {
+      for (const filter of booster.filters) {
+        const vars = boosterVariables(filter, 1, booster);
+        for (const [key, value] of Object.entries(vars)) {
+          expect(value, `${booster.id}.${key}`).not.toBeNull();
+          expect(value, `${booster.id}.${key}`).not.toBeUndefined();
+        }
+      }
+    }
+  });
+
+  it("declares exactly the variables it sends", () => {
+    for (const booster of BOOSTERS) {
+      const vars = boosterVariables(booster.filters[0]!, 2, booster);
+      const query = boosterQuery(vars, "id");
+      const declared = [...query.matchAll(/\$(\w+):/g)].map((m) => m[1]).sort();
+      expect(declared, booster.id).toEqual(Object.keys(vars).sort());
+      expect(query).not.toMatch(/\$\w+\s*\)\s*\{\s*$/m);
+    }
+    const decouverte = getBooster("decouverte")!;
+    const query = boosterQuery(boosterVariables(decouverte.filters[0]!, 1, decouverte), "id");
+    expect(query).toContain("media(type: ANIME, sort: $sort, isAdult: $adult, averageScore_greater: $score,");
+    expect(query).not.toContain("episodes_greater");
+    expect(query).not.toContain("popularity_greater");
   });
 });
 
