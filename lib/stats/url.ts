@@ -1,13 +1,33 @@
 /**
- * Stats page state in the URL (shareable, survives back / forward): filters and tab.
+ * Stats page state in the URL (shareable, survives back / forward): filters, compared segment and tab.
  * Pure, unit-tested in tests/stats.test.ts.
  */
 import { CANONICAL_STATUSES, type CanonicalStatus } from "../mapping";
 import { EMPTY_FILTERS, type Dimension, type StatsFilters } from "./gold";
 import type { LengthBucket } from "./types";
 
-export const STATS_TABS = ["overview", "time", "tastes", "scores", "catalog", "backlog", "profile"] as const;
+export const STATS_TABS = [
+  "overview",
+  "time",
+  "tastes",
+  "scores",
+  "catalog",
+  "backlog",
+  "profile",
+  "history",
+  "compare",
+] as const;
 export type StatsTab = (typeof STATS_TABS)[number];
+
+/** Everything the URL holds: the page filters (segment A), the compare tab's segment B, and the tab. */
+export interface StatsUrlState {
+  filters: StatsFilters;
+  compare: StatsFilters;
+  tab: StatsTab;
+}
+
+/** Segment B's parameters carry this prefix ("b.genre=Action"). */
+const COMPARE_PREFIX = "b.";
 
 const LENGTHS: LengthBucket[] = ["film", "short", "standard", "long", "saga"];
 
@@ -27,39 +47,52 @@ function score(value: string | null): number | null {
   return Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
 }
 
-export function parseStatsParams(params: URLSearchParams): { filters: StatsFilters; tab: StatsTab } {
+function readFilters(params: URLSearchParams, prefix = ""): StatsFilters {
+  const all = (name: string) => params.getAll(prefix + name);
   const filters: StatsFilters = {
     ...EMPTY_FILTERS,
-    statuses: params.getAll("status").filter((s): s is CanonicalStatus => CANONICAL_STATUSES.includes(s as CanonicalStatus)),
-    genreMode: params.get("gmode") === "all" ? "all" : "any",
-    decades: params
-      .getAll("decade")
+    statuses: all("status").filter((s): s is CanonicalStatus => CANONICAL_STATUSES.includes(s as CanonicalStatus)),
+    genreMode: params.get(`${prefix}gmode`) === "all" ? "all" : "any",
+    decades: all("decade")
       .map(Number)
       .filter((d) => Number.isInteger(d) && d % 10 === 0),
-    lengths: params.getAll("length").filter((l): l is LengthBucket => LENGTHS.includes(l as LengthBucket)),
-    completedYears: params
-      .getAll("done")
+    lengths: all("length").filter((l): l is LengthBucket => LENGTHS.includes(l as LengthBucket)),
+    completedYears: all("done")
       .map(Number)
       .filter((y) => Number.isInteger(y) && y > 1900),
-    scoreMin: score(params.get("smin")),
-    scoreMax: score(params.get("smax")),
+    scoreMin: score(params.get(`${prefix}smin`)),
+    scoreMax: score(params.get(`${prefix}smax`)),
   };
-  for (const [key, param] of LIST_PARAMS) filters[key] = params.getAll(param).filter(Boolean);
-  const tab = params.get("tab");
-  return { filters, tab: STATS_TABS.includes(tab as StatsTab) ? (tab as StatsTab) : "overview" };
+  for (const [key, param] of LIST_PARAMS) filters[key] = all(param).filter(Boolean);
+  return filters;
 }
 
-export function statsSearch(filters: StatsFilters, tab: StatsTab): string {
+function writeFilters(params: URLSearchParams, filters: StatsFilters, prefix = ""): void {
+  const add = (name: string, value: string) => params.append(prefix + name, value);
+  for (const s of filters.statuses) add("status", s);
+  for (const [key, param] of LIST_PARAMS) for (const v of filters[key]) add(param, v);
+  if (filters.genres.length > 1 && filters.genreMode === "all") add("gmode", "all");
+  for (const d of filters.decades) add("decade", String(d));
+  for (const l of filters.lengths) add("length", l);
+  for (const y of filters.completedYears) add("done", String(y));
+  if (filters.scoreMin !== null) add("smin", String(filters.scoreMin));
+  if (filters.scoreMax !== null) add("smax", String(filters.scoreMax));
+}
+
+export function parseStatsParams(params: URLSearchParams): StatsUrlState {
+  const tab = params.get("tab");
+  return {
+    filters: readFilters(params),
+    compare: readFilters(params, COMPARE_PREFIX),
+    tab: STATS_TABS.includes(tab as StatsTab) ? (tab as StatsTab) : "overview",
+  };
+}
+
+export function statsSearch(state: StatsUrlState): string {
   const params = new URLSearchParams();
-  if (tab !== "overview") params.set("tab", tab);
-  for (const s of filters.statuses) params.append("status", s);
-  for (const [key, param] of LIST_PARAMS) for (const v of filters[key]) params.append(param, v);
-  if (filters.genres.length > 1 && filters.genreMode === "all") params.set("gmode", "all");
-  for (const d of filters.decades) params.append("decade", String(d));
-  for (const l of filters.lengths) params.append("length", l);
-  for (const y of filters.completedYears) params.append("done", String(y));
-  if (filters.scoreMin !== null) params.set("smin", String(filters.scoreMin));
-  if (filters.scoreMax !== null) params.set("smax", String(filters.scoreMax));
+  if (state.tab !== "overview") params.set("tab", state.tab);
+  writeFilters(params, state.filters);
+  writeFilters(params, state.compare, COMPARE_PREFIX);
   const search = params.toString();
   return search ? `?${search}` : "";
 }

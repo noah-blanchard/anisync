@@ -455,9 +455,11 @@ describe("url state", () => {
       completedYears: [2024],
       scoreMin: 7,
     };
-    const search = statsSearch(filters, "scores");
-    expect(parseStatsParams(new URLSearchParams(search))).toEqual({ filters, tab: "scores" });
-    expect(statsSearch(EMPTY_FILTERS, "overview")).toBe("");
+    const compare: StatsFilters = { ...EMPTY_FILTERS, completedYears: [2025], genres: ["Drama"] };
+    const search = statsSearch({ filters, compare, tab: "compare" });
+    expect(search).toContain("b.done=2025");
+    expect(parseStatsParams(new URLSearchParams(search))).toEqual({ filters, compare, tab: "compare" });
+    expect(statsSearch({ filters: EMPTY_FILTERS, compare: EMPTY_FILTERS, tab: "overview" })).toBe("");
   });
 
   it("ignores invalid values", () => {
