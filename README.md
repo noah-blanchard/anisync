@@ -198,7 +198,7 @@ services, left (✕) to skip; ↶ undoes the last choice. Keyboard: `Enter` open
 
 ## Stats
 
-The **Stats** page (`/stats`) analyses the whole list, in seven tabs:
+The **Stats** page (`/stats`) analyses the whole list, in nine tabs:
 
 | Tab | What |
 |---|---|
@@ -209,6 +209,14 @@ The **Stats** page (`/stats`) analyses the whole list, in seven tabs:
 | Catalogue | Formats, length, decades, years, seasons, sources, studios, countries; favourite and harshest studios; popularity |
 | Backlog | Size, hours, age, time to clear it at my pace, what to watch next (AniList score adjusted by my genre affinities), oldest and forgotten titles |
 | Profil | Eleven axes (volume, finishing, curiosity, flair, era, pace, simulcast, format, franchises, backlog, generosity) and fourteen achievements, with bronze / silver / gold medals |
+| Historique | Titles finished and added since the beginning (from the rows' dates), my scores vs the community year by year, and from the daily snapshots: list size, finished, to watch and mean score day by day, backlog trend and projection, and a journal of changes (added, started, finished, dropped, rated, episodes) |
+| Comparer | Two selections side by side: A is the page's filters, B its own (presets for the last years, films, long series, or any filter); key figures with the gap, score distributions, genres and profiles |
+
+**Wrapped.** `/stats/wrapped?year=<year>` (linked from the overview) tells a year in full-screen cards: hours, titles
+finished and record month, top genres, favourite, studio and hidden gem, disagreements with the community, pace and
+simulcast, medals reached that year, the profile of the year, and a summary that can be shared as an image
+(1080×1350 PNG, Web Share on phones, download elsewhere). It works for analysed profiles too
+(`/stats/u/<name>/wrapped`).
 
 Every bar, column, calendar day and record opens the titles behind it, and can narrow the page to them. Filters
 (status, genres with any / all, tags, score range, format, length, year finished, decade, source, studio, country)
@@ -239,6 +247,7 @@ The data goes through three layers, bronze to gold:
 - **Dates.** Start and finish dates come from AniList (MAL as a fallback); airing dates from AniList. Paces above
   16 hours of watching a day are treated as wrong dates and left out. Estimated hours per month spread each finished
   title evenly between its start and finish dates.
-- Gold is split by theme: `gold.ts` (filters, groups, scores, records), `time.ts`, `backlog.ts` and `profile.ts`
-  (traits and achievements). Everything there and in `silver.ts` and `url.ts` is pure and covered by
-  `tests/stats.test.ts` and `tests/stats-v2.test.ts`.
+- Gold is split by theme: `gold.ts` (filters, groups, scores, records), `time.ts`, `backlog.ts`, `profile.ts`
+  (traits and achievements), `history.ts` (snapshots and dated history), `segments.ts` (Comparer) and `wrapped.ts`.
+  The Comparer's segment B lives in the URL with a `b.` prefix (`b.genre=Action`). Everything there and in `silver.ts` and `url.ts` is pure and covered by
+  `tests/stats*.test.ts`.
