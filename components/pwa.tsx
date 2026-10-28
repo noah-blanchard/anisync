@@ -53,6 +53,19 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     setStandalone(detectStandalone());
     document.documentElement.toggleAttribute("data-standalone", detectStandalone());
 
+    // Installed app: lock zoom so it feels native (browsers keep pinch-zoom for accessibility).
+    const preventZoom = (e: Event) => e.preventDefault();
+    if (detectStandalone()) {
+      document
+        .querySelector('meta[name="viewport"]')
+        ?.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+        );
+      // iOS ignores user-scalable=no: block its pinch gesture directly.
+      document.addEventListener("gesturestart", preventZoom);
+    }
+
     const media = window.matchMedia("(display-mode: standalone)");
     const onDisplayChange = () => setStandalone(detectStandalone());
     const onPrompt = (e: Event) => {
@@ -77,6 +90,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       media.removeEventListener("change", onDisplayChange);
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
+      document.removeEventListener("gesturestart", preventZoom);
     };
   }, []);
 

@@ -140,6 +140,7 @@
 /* Installed app: behave like a native app (no callouts/selection on chrome, no rubber-band). */
 html[data-standalone] {
   overscroll-behavior: none;
+  touch-action: pan-x pan-y; /* no pinch or double-tap zoom */
 }
 html[data-standalone] nav,
 html[data-standalone] button,
