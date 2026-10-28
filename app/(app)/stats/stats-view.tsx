@@ -29,10 +29,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useList } from "@/hooks/use-list";
 import { useRefreshStats, useStats } from "@/hooks/use-stats";
 import { activeFilterCount, applyFilters, tasteRows, type StatsFilters } from "@/lib/stats/gold";
-import { mergeFilters, parseStatsParams, statsSearch, type StatsTab } from "@/lib/stats/url";
+import { mergeFilters, parseStatsParams, statsSearch, type StatsTab, type StatsUrlState } from "@/lib/stats/url";
 import { cn } from "@/lib/utils";
 import { BacklogTab } from "./backlog-tab";
 import { CatalogTab } from "./catalog-tab";
+import { CompareTab } from "./compare-tab";
+import { HistoryTab } from "./history-tab";
 import { OverviewTab } from "./overview-tab";
 import { ProfileTab } from "./profile-tab";
 import { ScoresTab } from "./scores-tab";
@@ -47,6 +49,8 @@ const TABS: { id: StatsTab; label: string }[] = [
   { id: "catalog", label: "Catalogue" },
   { id: "backlog", label: "Backlog" },
   { id: "profile", label: "Profil" },
+  { id: "history", label: "Historique" },
+  { id: "compare", label: "Comparer" },
 ];
 
 export function StatsSkeleton() {
@@ -101,17 +105,20 @@ export function StatsView({ user }: { user?: string }) {
   const url = params.toString();
   const [state, setState] = React.useState(() => ({ url, ...parseStatsParams(new URLSearchParams(url)) }));
   if (state.url !== url) setState({ url, ...parseStatsParams(new URLSearchParams(url)) });
-  const { filters, tab } = state;
+  const { filters, compare, tab } = state;
+  const [compareOpen, setCompareOpen] = React.useState(false);
 
   const navigate = React.useCallback(
-    (nextFilters: StatsFilters, nextTab: StatsTab) => {
-      setState((prev) => ({ url: prev.url, filters: nextFilters, tab: nextTab }));
-      router.replace(`${pathname}${statsSearch(nextFilters, nextTab)}`, { scroll: false });
+    (next: Partial<StatsUrlState>) => {
+      const merged: StatsUrlState = { filters, compare, tab, ...next };
+      setState((prev) => ({ url: prev.url, ...merged }));
+      router.replace(`${pathname}${statsSearch(merged)}`, { scroll: false });
     },
-    [router, pathname],
+    [router, pathname, filters, compare, tab],
   );
-  const setFilters = React.useCallback((next: StatsFilters) => navigate(next, tab), [navigate, tab]);
-  const setTab = React.useCallback((next: StatsTab) => navigate(filters, next), [navigate, filters]);
+  const setFilters = React.useCallback((next: StatsFilters) => navigate({ filters: next }), [navigate]);
+  const setCompare = React.useCallback((next: StatsFilters) => navigate({ compare: next }), [navigate]);
+  const setTab = React.useCallback((next: StatsTab) => navigate({ tab: next }), [navigate]);
 
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -127,6 +134,8 @@ export function StatsView({ user }: { user?: string }) {
   const rows = React.useMemo(() => data?.rows ?? [], [data]);
   const filtered = React.useMemo(() => applyFilters(rows, filters), [rows, filters]);
   const taste = React.useMemo(() => tasteRows(filtered, filters), [filtered, filters]);
+  const filteredB = React.useMemo(() => applyFilters(rows, compare), [rows, compare]);
+  const wrappedHref = user ? `/stats/u/${encodeURIComponent(user)}/wrapped` : "/stats/wrapped";
   const filterCount = activeFilterCount(filters);
   const withoutMeta = rows.filter((r) => !r.hasMeta).length;
   const profile = data?.user;
@@ -292,7 +301,7 @@ export function StatsView({ user }: { user?: string }) {
               ) : (
                 <>
                   <TabsContent value="overview">
-                    <OverviewTab rows={filtered} taste={taste} onSelect={setSelection} onTab={setTab} />
+                    <OverviewTab rows={filtered} taste={taste} onSelect={setSelection} onTab={setTab} wrappedHref={wrappedHref} />
                   </TabsContent>
                   <TabsContent value="time">
                     <TimeTab rows={taste} onSelect={setSelection} />
@@ -311,6 +320,21 @@ export function StatsView({ user }: { user?: string }) {
                   </TabsContent>
                   <TabsContent value="profile">
                     <ProfileTab rows={filtered} />
+                  </TabsContent>
+                  <TabsContent value="history">
+                    <HistoryTab rows={taste} allRows={rows} user={user} />
+                  </TabsContent>
+                  <TabsContent value="compare">
+                    <CompareTab
+                      filteredA={filtered}
+                      filteredB={filteredB}
+                      filtersA={filters}
+                      filtersB={compare}
+                      allRows={rows}
+                      onEditB={() => setCompareOpen(true)}
+                      onChangeB={setCompare}
+                      onSwap={() => navigate({ filters: compare, compare: filters })}
+                    />
                   </TabsContent>
                 </>
               )}
@@ -333,6 +357,15 @@ export function StatsView({ user }: { user?: string }) {
           filters={filters}
           onChange={setFilters}
           resultCount={filtered.length}
+        />
+        <FilterSheet
+          title="Filtres de la sélection B"
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+          rows={rows}
+          filters={compare}
+          onChange={setCompare}
+          resultCount={filteredB.length}
         />
         <TitlesSheet selection={selection} onClose={() => setSelection(null)} onFilter={(extra) => setFilters(mergeFilters(filters, extra))} />
         {search}

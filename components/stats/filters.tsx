@@ -216,6 +216,7 @@ export function FilterSheet({
   filters,
   onChange,
   resultCount,
+  title = "Filtres",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -223,12 +224,13 @@ export function FilterSheet({
   filters: StatsFilters;
   onChange: (filters: StatsFilters) => void;
   resultCount: number;
+  title?: string;
 }) {
   return (
-    <ResponsiveOverlay open={open} onOpenChange={onOpenChange} title="Filtres" description="Affiner les statistiques">
+    <ResponsiveOverlay open={open} onOpenChange={onOpenChange} title={title} description="Affiner les statistiques">
       <div className="flex flex-col gap-6 p-5 pb-8 lg:p-6">
         <div className="hidden items-center justify-between lg:flex">
-          <h2 className="text-lg font-semibold">Filtres</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
         </div>
 
         <FilterSection title="Statut">
@@ -386,6 +388,11 @@ function activeChips(f: StatsFilters): ActiveChip[] {
     chips.push({ id: "score", label, remove: (cur) => ({ ...cur, scoreMin: null, scoreMax: null }) });
   }
   return chips;
+}
+
+/** The active filters, in words ("Action", "Notes 7 à 10"…). */
+export function filterLabels(filters: StatsFilters): string[] {
+  return activeChips(filters).map((c) => c.label);
 }
 
 /** The active filters as removable chips. */

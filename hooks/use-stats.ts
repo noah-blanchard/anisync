@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { api, ApiError } from "@/lib/client-api";
+import type { HistoryPayload } from "@/lib/stats/history";
 import type { StatsPayload } from "@/lib/stats/types";
 
 /** No user = my own list; otherwise a public AniList profile. */
@@ -33,4 +34,13 @@ export function useRefreshStats(user?: string) {
     qc.setQueryData(statsKey(user), payload);
     return payload;
   }, [qc, user]);
+}
+
+/** Daily snapshots of a list, summarized: points per day and the journal of changes. */
+export function useHistory(user?: string) {
+  return useQuery({
+    queryKey: ["stats-history", user?.toLowerCase() ?? null],
+    queryFn: () => api<HistoryPayload>(`/api/stats/history${user ? `?user=${encodeURIComponent(user)}` : ""}`),
+    staleTime: 5 * 60_000,
+  });
 }

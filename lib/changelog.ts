@@ -9,6 +9,16 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.9.0",
+    date: "2026-10-28",
+    title: "Historique, comparaison et Wrapped",
+    changes: [
+      "Nouvel onglet Historique : ta liste depuis le début, tes notes année après année, et jour par jour la taille de ta liste, ton backlog (avec sa tendance) et un journal de tes changements.",
+      "Nouvel onglet Comparer : deux sélections côte à côte (par exemple 2024 contre 2025, ou films contre séries), avec chiffres, notes, genres et profils.",
+      "AniSync Wrapped : ton année en cartes plein écran, du temps passé à ton coup de cœur, avec une image à partager.",
+    ],
+  },
+  {
     version: "1.8.0",
     date: "2026-10-28",
     title: "Les stats de tes amis",

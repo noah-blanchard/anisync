@@ -52,8 +52,8 @@ export function AppShell({
   const pathname = usePathname();
   useGlobalShortcuts();
 
-  // Opening a booster takes the whole screen: no navigation to tap by accident mid-swipe.
-  if (/^\/booster\/[^/]+/.test(pathname)) {
+  // Opening a booster or a Wrapped takes the whole screen: no navigation to tap by accident mid-swipe.
+  if (/^\/booster\/[^/]+/.test(pathname) || /^\/stats\/(u\/[^/]+\/)?wrapped$/.test(pathname)) {
     return (
       <OverlayProvider>
         <div aria-hidden className="status-bar-scrim" />
