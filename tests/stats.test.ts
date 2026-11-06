@@ -35,6 +35,12 @@ function state(status: CanonicalStatus, progress: number, score: number): EntryS
 function entry(id: number, s: EntryState, extra: Partial<MergedEntry> = {}): MergedEntry {
   return {
     key: `mal:${id}`,
+    kind: "anime",
+    simklId: null,
+    simkl: null,
+    year: null,
+    nextEpisode: null,
+    lastEpisode: null,
     malId: id,
     anilistId: id + 1000,
     title: `Anime ${id}`,

@@ -1,6 +1,7 @@
 # AniSync
 
-Track your anime **once**: every +1 episode, status change or score is written to **MyAnimeList** and **AniList** at the same time.
+Track your anime **once**: every +1 episode, status change or score is written to **MyAnimeList** and **AniList** at the same time,
+and to **Simkl** when it is connected. Simkl also brings **TV shows and movies** into the same app.
 Single-user, self-hosted (Dokploy, Docker). The interface is in French.
 
 - Next.js 15 (App Router, standalone) · Tailwind CSS v4 · shadcn/ui · TanStack Query
@@ -15,16 +16,17 @@ browser ──► middleware (HS256 JWT session) ──► Route Handlers /api/*
                                                 │
                                lib/sync.ts (60 s list cache, parallel writes)
                                  │                       │
-                             lib/mal.ts            lib/anilist.ts
-                 (OAuth PKCE plain, refresh)   (OAuth code grant, GraphQL)
-                                 │                       │
-                                 └──── SQLite /data ─────┘
-                             (encrypted connections, id_map)
+                             lib/mal.ts            lib/anilist.ts         lib/simkl.ts (optional)
+                 (OAuth PKCE plain, refresh)   (OAuth code grant, GraphQL)  (OAuth V2 PKCE S256, refresh)
+                                 │                       │                       │
+                                 └────────────── SQLite /data ───────────────────┘
+                                   (encrypted connections, id_map)
 ```
 
 - The canonical key of an entry is the **MAL id**; MAL ↔ AniList id pairs are cached in `id_map`.
 - `lib/mapping.ts` and `lib/merge.ts` are pure functions covered by unit tests (`pnpm test`).
-- A write goes to both services in parallel (`Promise.allSettled`); the UI is optimistic and rolls back per service on failure.
+- A write goes to every service in parallel (`Promise.allSettled`); the UI is optimistic and rolls back per service on failure.
+- Shows and movies come from Simkl only (keys `simkl:show:<id>`, `simkl:movie:<id>`); see [Simkl](#simkl-shows-movies-and-anime).
 
 ---
 
@@ -48,6 +50,7 @@ Environment variables (all validated at startup; the app exits with a clear mess
 | `MAL_CLIENT_ID` | MyAnimeList app client ID. |
 | `MAL_CLIENT_SECRET` | Optional: present for a MAL app of type "web". |
 | `ANILIST_CLIENT_ID` / `ANILIST_CLIENT_SECRET` | AniList client credentials. |
+| `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET` | Optional. Simkl client credentials (AUTH V2 app). Without `SIMKL_CLIENT_ID`, everything Simkl stays hidden. |
 | `DATABASE_PATH` | SQLite file (`./data/anisync.db` locally, `/data/anisync.db` in production). |
 
 > ⚠️ Changing `APP_SECRET` invalidates the session **and** makes stored tokens unreadable: you will have to reconnect MAL and AniList.
@@ -70,7 +73,13 @@ MAL accepts **only one** redirect URL per client: create a separate client for l
 2. **Redirect URL**: `${APP_URL}/api/auth/anilist/callback`.
 3. Copy the **ID** (`ANILIST_CLIENT_ID`) and the **Secret** (`ANILIST_CLIENT_SECRET`).
 
-Both exact URIs are shown (with a copy button) on the **Paramètres** (settings) page once the app is running.
+### Simkl (optional)
+1. Go to <https://simkl.com/settings/developer/> → create a new app, of type **Server apps & services**, on **AUTH V2**
+   (a V1 client id is rejected with `invalid_client`; V1 is being retired around April 2027).
+2. **Redirect URI**: `${APP_URL}/api/auth/simkl/callback`, exactly (same protocol and domain, no trailing slash).
+3. Copy the **Client ID** (`SIMKL_CLIENT_ID`) and the **Client Secret** (`SIMKL_CLIENT_SECRET`), redeploy, then **Paramètres → Simkl → Connecter**.
+
+The exact URIs are shown (with a copy button) on the **Paramètres** (settings) page once the app is running.
 
 ## 3. Deploying on Dokploy
 
@@ -116,7 +125,7 @@ Notes:
 
 ## 5. Backup
 
-All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata, daily list snapshots and the snapshots of the AniList profiles analysed). The lists themselves stay on MAL and AniList.
+All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata, daily list snapshots and the snapshots of the AniList profiles analysed). The lists themselves stay on MAL, AniList and Simkl.
 
 ```bash
 # safest: stop, copy, restart (a few seconds)
@@ -146,6 +155,8 @@ To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.
 | "Too many requests" toasts / 429 errors | AniList allows ~30-90 requests/min. AniSync honours `Retry-After` (2 retries max); wait a minute. Bulk alignment spaces its writes by about 1 s. |
 | `SQLITE_CANTOPEN` / folder not writable | The `/data` volume is not writable by uid 1000: use a named volume or `chown 1000:1000`. |
 | Redirected to the wrong URL after login / OAuth | `APP_URL` does not match the public domain (e.g. `http` instead of `https`). |
+| Simkl: `invalid_client` | The Simkl app is not an AUTH V2 app, or the client id / secret is wrong. |
+| Simkl: "Connexion Simkl expirée" | The refresh token lapsed (180 days without using the app) or the app was revoked in Simkl's Connected Apps: click **Reconnecter**. |
 | Session cookie not kept | Over HTTPS the cookie is `Secure`: access the app through the HTTPS domain set in `APP_URL`. |
 
 ## How sync works
@@ -158,6 +169,32 @@ To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.
 - If only one service is connected, the app keeps working with it and shows a banner to connect the other.
 
 Keyboard shortcuts (desktop): `/` search, `+` on a focused card = next episode, `-` = previous episode.
+
+## Simkl: shows, movies and anime
+
+Simkl is optional. Once connected:
+
+- **Anime**: Simkl is a third mirror of MAL and AniList. Every +1, status change and score is also written to Simkl,
+  using the MAL / AniList ids and MAL-style episode numbers (Simkl's anime-native "Path B", so there is no season
+  mapping). The out-of-sync check covers Simkl too ("Absent sur Simkl", "Garder Simkl"); an anime only on Simkl is
+  marked "Simkl uniquement".
+- **Shows and movies** live on Simkl only. Search them in **Ajouter** (Anime / Séries / Films), +1 marks the next
+  episode (`S02E05`), -1 removes the last one; a movie gets a **Vu** button. Movies only have À voir, Terminé and
+  Abandonné, like on Simkl.
+- A **Tout / Anime / Séries / Films** filter sits on the home page and the library (kept in the URL, `?kind=`).
+  Stats and boosters stay anime only.
+- Simkl has no "Revisionnage" status: a rewatch is "En cours" there, and it is not reported as out of sync.
+
+How it talks to Simkl (`lib/simkl.ts`, pure parts in `lib/simkl-core.ts`, `lib/simkl-parse.ts`, `lib/simkl-payloads.ts`):
+
+- **AUTH V2** with PKCE S256. The access token lasts 7 days and is refreshed automatically (a day before expiry or on
+  a 401); the refresh token lasts 180 days and slides forward on every refresh, so reconnecting is only needed after
+  six months without using the app.
+- The library is read with `GET /sync/all-items` only when `GET /sync/activities` says something changed.
+- Writes are planned as a list of POST calls (`/sync/history`, `/sync/history/remove`, `/sync/add-to-list`,
+  `/sync/ratings`) and sent one at a time, at least 1.1 s apart: Simkl allows 1 POST a second and suspends apps
+  that keep going over.
+- Posters go through `wsrv.nl`, as Simkl recommends. Simkl requires attribution: each title links to its Simkl page.
 
 ## Booster packs
 

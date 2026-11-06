@@ -6,7 +6,7 @@ export interface ConnectionExtra {
 }
 
 export const connections = sqliteTable("connections", {
-  service: text("service", { enum: ["mal", "anilist"] }).primaryKey(),
+  service: text("service", { enum: ["mal", "anilist", "simkl"] }).primaryKey(),
   /** AES-256-GCM encrypted */
   accessToken: text("access_token").notNull(),
   /** AES-256-GCM encrypted, AniList has none */

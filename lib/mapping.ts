@@ -2,6 +2,7 @@
  * Pure mapping between the canonical AniSync model and the MAL / AniList models.
  * No I/O here: everything is unit-tested in tests/mapping.test.ts.
  */
+import { STATUS_ORDER } from "./labels";
 
 export const CANONICAL_STATUSES = [
   "watching",
@@ -20,7 +21,11 @@ export const ANILIST_STATUSES = ["CURRENT", "COMPLETED", "PAUSED", "DROPPED", "P
 export type AniListStatus = (typeof ANILIST_STATUSES)[number];
 
 export type SyncField = "status" | "progress" | "score";
-export type ServiceName = "mal" | "anilist";
+export type ServiceName = "mal" | "anilist" | "simkl";
+/** The historical anime services (Simkl is handled separately: it also holds shows and movies). */
+export const ANIME_SERVICES = ["mal", "anilist"] as const;
+export const ALL_SERVICES = ["mal", "anilist", "simkl"] as const;
+export type MediaKind = "anime" | "show" | "movie";
 
 /** State of one list entry on one service, expressed in the canonical model. */
 export interface EntryState {
@@ -81,6 +86,45 @@ export function fromAniListStatus(status: AniListStatus): CanonicalStatus {
   return FROM_ANILIST[status];
 }
 
+export const SIMKL_STATUSES = ["watching", "plantowatch", "completed", "hold", "dropped"] as const;
+export type SimklStatus = (typeof SIMKL_STATUSES)[number];
+
+const TO_SIMKL: Record<CanonicalStatus, SimklStatus> = {
+  watching: "watching",
+  rewatching: "watching",
+  completed: "completed",
+  on_hold: "hold",
+  dropped: "dropped",
+  plan_to_watch: "plantowatch",
+};
+
+const FROM_SIMKL: Record<SimklStatus, CanonicalStatus> = {
+  watching: "watching",
+  plantowatch: "plan_to_watch",
+  completed: "completed",
+  hold: "on_hold",
+  dropped: "dropped",
+};
+
+/** Movies are atomic on Simkl: no watching / hold, so they fall back to the closest status. */
+export function toSimklStatus(status: CanonicalStatus, kind: MediaKind): SimklStatus {
+  if (kind === "movie") {
+    if (status === "watching" || status === "rewatching") return "completed";
+    if (status === "on_hold") return "plantowatch";
+  }
+  return TO_SIMKL[status];
+}
+
+export function fromSimklStatus(status: SimklStatus): CanonicalStatus {
+  return FROM_SIMKL[status];
+}
+
+/** Statuses a user can pick for a given kind of media. */
+export function statusesForKind(kind: MediaKind): CanonicalStatus[] {
+  if (kind === "movie") return ["plan_to_watch", "completed", "dropped"];
+  return [...STATUS_ORDER];
+}
+
 export function isActiveStatus(status: CanonicalStatus): boolean {
   return status === "watching" || status === "rewatching";
 }
@@ -133,6 +177,20 @@ export function diffStates(a: EntryState, b: EntryState): SyncField[] {
   return diff;
 }
 
+/** Simkl has no "rewatching" status: it is the same as "watching" when comparing. */
+function comparableStatus(status: CanonicalStatus): CanonicalStatus {
+  return status === "rewatching" ? "watching" : status;
+}
+
+/** Diff between a MAL/AniList reference state and the Simkl state (rewatching = watching). */
+export function diffWithSimkl(reference: EntryState, simkl: EntryState): SyncField[] {
+  const diff: SyncField[] = [];
+  if (comparableStatus(reference.status) !== comparableStatus(simkl.status)) diff.push("status");
+  if (reference.progress !== simkl.progress) diff.push("progress");
+  if (reference.score !== simkl.score) diff.push("score");
+  return diff;
+}
+
 /** Applies a patch to a state, normalising values. */
 export function applyPatch(state: EntryState, patch: EntryPatch, total: number | null): EntryState {
   return {
@@ -165,22 +223,38 @@ export function reachedEnd(state: EntryState, total: number | null): boolean {
   return max !== null && state.progress >= max && state.status !== "completed";
 }
 
+/**
+ * The most advanced of several states: highest progress, then most recent update.
+ * On a full tie the earliest state in the list wins.
+ */
+export function pickMostAdvanced(states: readonly (EntryState | null)[]): EntryState | null {
+  let best: EntryState | null = null;
+  for (const state of states) {
+    if (!state) continue;
+    if (
+      !best ||
+      state.progress > best.progress ||
+      (state.progress === best.progress && (state.updatedAt ?? 0) > (best.updatedAt ?? 0))
+    ) {
+      best = state;
+    }
+  }
+  return best;
+}
+
 /** The state shown in the UI when both sides exist: the most advanced one. */
 export function pickDisplayState(mal: EntryState | null, anilist: EntryState | null): EntryState | null {
-  if (!mal) return anilist;
-  if (!anilist) return mal;
-  if (anilist.progress > mal.progress) return anilist;
-  if (mal.progress > anilist.progress) return mal;
-  return (anilist.updatedAt ?? 0) > (mal.updatedAt ?? 0) ? anilist : mal;
+  return pickMostAdvanced([mal, anilist]);
 }
 
 /**
  * "Prendre le max": highest progress wins (its status comes along),
- * and the highest non-zero score is kept.
+ * and the highest non-zero score is kept. Works with any number of states.
  */
-export function maxState(mal: EntryState, anilist: EntryState): EntryState {
-  const base = pickDisplayState(mal, anilist) ?? mal;
-  return { ...base, score: Math.max(mal.score, anilist.score) };
+export function maxState(first: EntryState, ...others: EntryState[]): EntryState {
+  const all = [first, ...others];
+  const base = pickMostAdvanced(all) ?? first;
+  return { ...base, score: Math.max(...all.map((s) => s.score)) };
 }
 
 /** Fields of `target` that must be written to transform `current` into it. */

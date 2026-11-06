@@ -11,14 +11,17 @@ export function StatusPicker({
   value,
   onChange,
   disabled,
+  statuses = STATUS_ORDER,
 }: {
   value: CanonicalStatus | null;
   onChange: (status: CanonicalStatus) => void;
   disabled?: boolean;
+  /** Statuses to offer (movies have fewer). */
+  statuses?: readonly CanonicalStatus[];
 }) {
   return (
     <div role="radiogroup" aria-label="Statut" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {STATUS_ORDER.map((status) => {
+      {statuses.map((status) => {
         const active = value === status;
         return (
           <button

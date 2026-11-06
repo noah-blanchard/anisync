@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { PageHeader } from "@/components/app-shell";
 import { ENTRY_GRID, EntryCard } from "@/components/entry-card";
+import { countKinds, KindFilter, matchesKind, useKindFilter } from "@/components/kind-filter";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/list-states";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,16 +47,21 @@ export function LibraryView() {
     if (params.get("focus") === "search") searchRef.current?.focus();
   }, [params]);
 
+  const kindAvailable = Boolean(data?.connections.simkl);
+  const [kind, setKind] = useKindFilter(kindAvailable);
+  const kindCounts = React.useMemo(() => countKinds(data?.entries ?? []), [data]);
+
   const counts = React.useMemo(() => {
     const result: Record<string, number> = {};
     for (const t of TABS) result[t.id] = 0;
     for (const entry of data?.entries ?? []) {
+      if (!matchesKind(entry, kind)) continue;
       const status = displayState(entry)?.status;
       const t = TABS.find((x) => status && x.statuses.includes(status));
       if (t) result[t.id] = (result[t.id] ?? 0) + 1;
     }
     return result;
-  }, [data]);
+  }, [data, kind]);
 
   const filtered = React.useMemo(() => {
     const statuses = TABS.find((t) => t.id === tab)?.statuses ?? [];
@@ -63,20 +69,22 @@ export function LibraryView() {
     return (data?.entries ?? [])
       .filter((e) => {
         const status = displayState(e)?.status;
+        if (!matchesKind(e, kind)) return false;
         if (!status || !statuses.includes(status)) return false;
         if (!q) return true;
         return normalize(`${e.title} ${e.englishTitle ?? ""}`).includes(q);
       })
       .sort(SORTERS[sort]);
-  }, [data, tab, query, sort]);
+  }, [data, tab, query, sort, kind]);
 
-  const ordered = useStableOrder(filtered, `${data?.fetchedAt}|${tab}|${query}|${sort}`);
+  const ordered = useStableOrder(filtered, `${data?.fetchedAt}|${tab}|${query}|${sort}|${kind}`);
 
   return (
     <>
       <PageHeader title="Bibliothèque" subtitle={data ? `${data.entries.length} entrées au total` : " "} />
 
       <div className="mb-5 flex flex-col gap-3">
+        {kindAvailable && <KindFilter value={kind} onChange={setKind} counts={kindCounts} />}
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList aria-label="Statut">
             {TABS.map((t) => (
@@ -132,12 +140,12 @@ export function LibraryView() {
         <EmptyState
           title={query ? "Aucun résultat" : "Rien ici"}
           description={query ? "Essaie un autre titre." : undefined}
-          cta={query ? undefined : { href: "/add", label: "Ajouter un anime" }}
+          cta={query ? undefined : { href: "/add", label: "Ajouter un titre" }}
         />
       ) : (
         <div className={ENTRY_GRID}>
           {ordered.map((entry) => (
-            <EntryCard key={entry.key} entry={entry} />
+            <EntryCard key={entry.key} entry={entry} showKind={kindAvailable && kind === "all"} />
           ))}
         </div>
       )}

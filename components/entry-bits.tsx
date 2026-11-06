@@ -4,6 +4,7 @@ import Image from "next/image";
 import { AlertTriangleIcon, ImageOffIcon } from "lucide-react";
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { SERVICE_LABELS } from "@/lib/labels";
 import type { MergedEntry } from "@/lib/merge";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +87,7 @@ export function ProgressBar({ value, total, className }: { value: number; total:
   );
 }
 
-/** Sync state badges: "Désynchronisé" (clickable), "MAL uniquement", "AniList uniquement". */
+/** Sync state badges: "Désynchronisé" (clickable), "MAL / AniList / Simkl uniquement". Nothing for shows and movies. */
 export function SyncBadges({
   entry,
   onCompare,
@@ -96,11 +97,10 @@ export function SyncBadges({
   onCompare?: () => void;
   className?: string;
 }) {
+  if (entry.kind !== "anime") return null;
   const badges: React.ReactNode[] = [];
   if (!entry.inSync) {
-    const label = entry.missingOn
-      ? `Absent sur ${entry.missingOn === "mal" ? "MAL" : "AniList"}`
-      : "Désynchronisé";
+    const label = entry.missingOn ? `Absent sur ${SERVICE_LABELS[entry.missingOn]}` : "Désynchronisé";
     badges.push(
       onCompare ? (
         <Badge key="sync" variant="warning" asChild>
@@ -111,7 +111,7 @@ export function SyncBadges({
               onCompare();
             }}
             className="pointer-events-auto relative z-10 min-h-6"
-            aria-label={`${label} : comparer MAL et AniList pour ${entry.title}`}
+            aria-label={`${label} : comparer les services pour ${entry.title}`}
           >
             <AlertTriangleIcon aria-hidden />
             {label}
@@ -129,6 +129,7 @@ export function SyncBadges({
   if (entry.availability === "anilist_only") {
     badges.push(<Badge key="only" variant="secondary">AniList uniquement</Badge>);
   }
+  if (entry.availability === "simkl_only") badges.push(<Badge key="only" variant="secondary">Simkl uniquement</Badge>);
   if (badges.length === 0) return null;
   return <div className={cn("flex flex-wrap items-center gap-1.5", className)}>{badges}</div>;
 }

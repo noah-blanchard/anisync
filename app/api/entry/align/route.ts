@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   const body = await parseBody(req, alignSchema);
   if (!body.ok) return body.response;
   try {
-    return NextResponse.json(await alignEntry(body.data.malId, body.data.source));
+    return NextResponse.json(await alignEntry(body.data.key ?? `mal:${body.data.malId}`, body.data.source));
   } catch (error) {
     const status = error instanceof ServiceError && error.status < 500 && error.status >= 400 ? error.status : 502;
     return jsonError(status, error instanceof ServiceError ? error.message : userMessage(error));

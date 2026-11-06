@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 const SERVICES: { id: ServiceName; name: string; site: string }[] = [
   { id: "mal", name: "MyAnimeList", site: "https://myanimelist.net/apiconfig" },
   { id: "anilist", name: "AniList", site: "https://anilist.co/settings/developer" },
+  { id: "simkl", name: "Simkl", site: "https://simkl.com/settings/developer/" },
 ];
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -63,7 +64,7 @@ function ConnectionCard({ service, info }: { service: (typeof SERVICES)[number];
   const [now] = React.useState(() => Date.now());
   const days = info ? daysUntil(info.expiresAt, now) : null;
 
-  // MAL tokens refresh automatically: only AniList expiry needs attention.
+  // MAL and Simkl tokens refresh automatically: only AniList expiry needs attention.
   const status = !info
     ? { label: "Non connecté", variant: "secondary" as const }
     : service.id === "anilist" && days !== null && days <= 0
@@ -99,7 +100,7 @@ function ConnectionCard({ service, info }: { service: (typeof SERVICES)[number];
           </div>
           <p className="truncate text-sm text-muted-foreground">
             {info
-              ? `${info.username} · ${service.id === "mal" ? "renouvelé automatiquement" : `jeton valable jusqu'au ${formatDate(info.expiresAt)}`}`
+              ? `${info.username} · ${service.id !== "anilist" ? "renouvelé automatiquement" : `jeton valable jusqu'au ${formatDate(info.expiresAt)}`}`
               : "Connecte ton compte pour synchroniser ce service."}
           </p>
         </div>
@@ -244,12 +245,14 @@ function BoosterSection() {
 export function SettingsView({
   connections,
   redirectUris,
+  simklEnabled,
   appUrl,
   qrSvg,
   version,
 }: {
   connections: Record<ServiceName, ConnectionInfo | null>;
   redirectUris: Record<ServiceName, string>;
+  simklEnabled: boolean;
   appUrl: string;
   qrSvg: string;
   version: string;
@@ -282,7 +285,7 @@ export function SettingsView({
       <PageHeader title="Paramètres" />
 
       <Section title="Comptes" description="Les jetons sont chiffrés sur ton serveur et ne quittent jamais le backend.">
-        {SERVICES.map((service) => (
+        {SERVICES.filter((service) => service.id !== "simkl" || simklEnabled).map((service) => (
           <ConnectionCard key={service.id} service={service} info={connections[service.id]} />
         ))}
         {iosApp && (
@@ -297,10 +300,27 @@ export function SettingsView({
 
       <Section
         title="Redirect URIs"
-        description="À renseigner dans la configuration de tes applications OAuth MyAnimeList et AniList."
+        description={`À renseigner dans la configuration de tes applications OAuth MyAnimeList${simklEnabled ? ", AniList et Simkl" : " et AniList"}.`}
       >
         <CopyField label="MyAnimeList" value={redirectUris.mal} />
         <CopyField label="AniList" value={redirectUris.anilist} />
+        {simklEnabled && (
+          <>
+            <CopyField label="Simkl" value={redirectUris.simkl} />
+            <p className="text-sm text-muted-foreground">
+              Crée ton application Simkl sur{" "}
+              <a
+                href="https://simkl.com/settings/developer/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-foreground underline underline-offset-4"
+              >
+                simkl.com/settings/developer
+              </a>{" "}
+              pour obtenir ton identifiant client.
+            </p>
+          </>
+        )}
       </Section>
 
       <Section title="Apparence">

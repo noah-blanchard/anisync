@@ -18,15 +18,19 @@ import {
   saveIdMappings,
   type ConnectionInfo,
 } from "./connections";
+import { isSimklEnabled } from "./env";
 import { ServiceError, userMessage } from "./errors";
 import { deleteMalEntry, fetchMalList, updateMalEntry } from "./mal";
 import {
+  ALL_SERVICES,
   applyPatch,
+  diffWithSimkl,
   isEmptyPatch,
   maxState,
   patchBetween,
   type EntryPatch,
   type EntryState,
+  type MediaKind,
   type ServiceName,
 } from "./mapping";
 import {
@@ -34,11 +38,15 @@ import {
   displayState,
   entryKey,
   mergeLists,
+  simklKey,
   unresolvedMalIds,
   type AniListListItem,
   type MalListItem,
   type MergedEntry,
+  type SimklListItem,
 } from "./merge";
+import { fetchSimklList, invalidateSimklCache, removeSimklEntry, saveSimklEntry, searchSimkl } from "./simkl";
+import type { SimklWriteTarget } from "./simkl-payloads";
 
 const CACHE_TTL_MS = 60_000;
 const ERROR_CACHE_TTL_MS = 10_000;
@@ -51,6 +59,8 @@ export interface ListPayload {
   /** Services whose list was loaded (used for sync comparisons) */
   sources: Record<ServiceName, boolean>;
   errors: Partial<Record<ServiceName, string>>;
+  /** Simkl is configured (client id set), whether or not it is connected */
+  simklEnabled: boolean;
   fetchedAt: number;
 }
 
@@ -63,10 +73,21 @@ export interface ServiceResult {
 }
 
 export interface WriteResult {
+  key: string;
   malId: number | null;
   anilistId: number | null;
+  simklId: number | null;
   mal: ServiceResult;
   anilist: ServiceResult;
+  simkl: ServiceResult;
+}
+
+/** How a request designates an entry: its key first, then ids (needed for items not in the list yet). */
+export interface EntryRef {
+  key?: string;
+  malId?: number | null;
+  anilistId?: number | null;
+  simkl?: { id: number; kind: MediaKind };
 }
 
 // ---------------------------------------------------------------------------
@@ -84,15 +105,19 @@ export function invalidateList(): void {
 
 async function loadList(): Promise<ListPayload> {
   const connections = getConnectionInfos();
-  const [malResult, anilistResult] = await Promise.allSettled([
+  const simklEnabled = isSimklEnabled();
+  const [malResult, anilistResult, simklResult] = await Promise.allSettled([
     connections.mal ? fetchMalList() : Promise.resolve(null),
     connections.anilist ? fetchAniListList() : Promise.resolve(null),
+    connections.simkl && simklEnabled ? fetchSimklList() : Promise.resolve(null),
   ]);
 
   const errors: ListPayload["errors"] = {};
   const mal: MalListItem[] | null = malResult.status === "fulfilled" ? malResult.value : null;
   const anilist: AniListListItem[] | null = anilistResult.status === "fulfilled" ? anilistResult.value : null;
+  const simkl: SimklListItem[] | null = simklResult.status === "fulfilled" ? simklResult.value : null;
   if (malResult.status === "rejected") errors.mal = userMessage(malResult.reason);
+  if (simklResult.status === "rejected") errors.simkl = userMessage(simklResult.reason);
   if (anilistResult.status === "rejected") errors.anilist = userMessage(anilistResult.reason);
 
   // Remember every pair AniList gave us, then look up the MAL entries still unknown.
@@ -103,7 +128,7 @@ async function loadList(): Promise<ListPayload> {
   }
   let idMap = loadIdMap();
   if (mal && anilist) {
-    const missing = unresolvedMalIds({ mal, anilist, idMap }).slice(0, MAX_RESOLVE_PER_LOAD);
+    const missing = unresolvedMalIds({ mal, anilist, simkl, idMap }).slice(0, MAX_RESOLVE_PER_LOAD);
     if (missing.length > 0) {
       try {
         saveIdMappings(await resolveAniListIds(missing));
@@ -115,10 +140,11 @@ async function loadList(): Promise<ListPayload> {
   }
 
   return {
-    entries: mergeLists({ mal, anilist, idMap }),
+    entries: mergeLists({ mal, anilist, simkl, idMap }),
     connections,
-    sources: { mal: mal !== null, anilist: anilist !== null },
+    sources: { mal: mal !== null, anilist: anilist !== null, simkl: simkl !== null },
     errors,
+    simklEnabled,
     fetchedAt: Date.now(),
   };
 }
@@ -139,37 +165,45 @@ export async function getMergedList(options: { force?: boolean } = {}): Promise<
   return globalForCache.__anisyncListInFlight;
 }
 
-function findEntry(payload: ListPayload, malId: number | null, anilistId: number | null): MergedEntry | undefined {
+function findEntry(payload: ListPayload, ref: EntryRef): MergedEntry | undefined {
+  if (ref.key) {
+    const byKey = payload.entries.find((e) => e.key === ref.key);
+    if (byKey) return byKey;
+  }
+  const malId = ref.malId ?? null;
+  const anilistId = ref.anilistId ?? null;
   return payload.entries.find(
-    (e) => (malId !== null && e.malId === malId) || (anilistId !== null && e.anilistId === anilistId),
+    (e) =>
+      (malId !== null && e.malId === malId) ||
+      (anilistId !== null && e.anilistId === anilistId) ||
+      (ref.simkl !== undefined && e.simklId === ref.simkl.id && e.kind === ref.simkl.kind),
   );
 }
 
 /** Write-through update of the cached entry; anything unexpected drops the cache. */
-function updateCachedEntry(
-  malId: number | null,
-  anilistId: number | null,
-  update: (entry: MergedEntry) => MergedEntry | null,
-): void {
+function updateCachedEntry(entry: MergedEntry, update: (entry: MergedEntry) => MergedEntry | null): void {
   const cached = globalForCache.__anisyncList;
   if (!cached) return;
-  const entry = findEntry(cached.payload, malId, anilistId);
-  if (!entry) {
+  const current = cached.payload.entries.find((e) => e.key === entry.key);
+  if (!current) {
     invalidateList();
     return;
   }
-  const next = update(entry);
+  const next = update(current);
   const entries = cached.payload.entries
-    .map((e) => (e === entry ? next : e))
+    .map((e) => (e === current ? next : e))
     .filter((e): e is MergedEntry => e !== null);
   cached.payload = { ...cached.payload, entries };
 }
+
+const NO_SOURCES: Record<ServiceName, boolean> = { mal: false, anilist: false, simkl: false };
 
 function withStates(entry: MergedEntry, states: Partial<Record<ServiceName, EntryState | null>>, sources: ListPayload["sources"]) {
   const next: MergedEntry = {
     ...entry,
     mal: states.mal !== undefined ? states.mal : entry.mal,
     anilist: states.anilist !== undefined ? states.anilist : entry.anilist,
+    simkl: states.simkl !== undefined ? states.simkl : entry.simkl,
   };
   return { ...next, ...computeSync(next, sources) };
 }
@@ -214,69 +248,150 @@ const SKIPPED: ServiceResult = { ok: true, skipped: true };
 
 type PerServicePatch = Partial<Record<ServiceName, EntryPatch>>;
 
-/** Runs the given patches on both services in parallel and updates the cache. */
+/** Everything needed to address one entry on the three services. */
+interface WriteTarget {
+  key: string;
+  kind: MediaKind;
+  malId: number | null;
+  anilistId: number | null;
+  simklId: number | null;
+  total: number | null;
+  nextEpisode: SimklWriteTarget["nextEpisode"];
+  lastEpisode: SimklWriteTarget["lastEpisode"];
+}
+
+function keyFor(kind: MediaKind, malId: number | null, anilistId: number | null, simklId: number | null): string {
+  if (kind !== "anime" && simklId !== null) return simklKey(kind, simklId);
+  if (malId === null && anilistId === null && simklId !== null) return simklKey("anime", simklId);
+  return entryKey(malId, anilistId);
+}
+
+function defaultTargets(kind: MediaKind): ServiceName[] {
+  return kind === "anime" ? [...ALL_SERVICES] : ["simkl"];
+}
+
+function simklWriteTarget(target: WriteTarget): SimklWriteTarget {
+  return {
+    kind: target.kind,
+    simklId: target.simklId,
+    malId: target.malId,
+    anilistId: target.anilistId,
+    nextEpisode: target.nextEpisode,
+    lastEpisode: target.lastEpisode,
+  };
+}
+
+function refreshCaches(target: WriteTarget, simklTouched: boolean): void {
+  if (simklTouched) invalidateSimklCache();
+  // Shows and movies depend on Simkl's next_to_watch: reload the merged list next time.
+  if (simklTouched && target.kind !== "anime") invalidateList();
+}
+
+/** Runs the given patches on the three services in parallel and updates the cache. */
 async function applyPatches(
-  ids: { malId: number | null; anilistId: number | null },
+  target: WriteTarget,
   patches: PerServicePatch,
   existing: MergedEntry | undefined,
 ): Promise<WriteResult> {
   const connections = getConnectionInfos();
+  const simklUsable = connections.simkl !== null && isSimklEnabled();
 
   const run = async (service: ServiceName): Promise<ServiceResult> => {
     const patch = patches[service];
     if (!patch) return SKIPPED;
-    const id = service === "mal" ? ids.malId : ids.anilistId;
-    if (id === null) return SKIPPED;
     if (!connections[service]) return SKIPPED;
+    if (service === "simkl" && !simklUsable) return SKIPPED;
+    if (service === "mal" && target.malId === null) return SKIPPED;
+    if (service === "anilist" && target.anilistId === null) return SKIPPED;
     if (isEmptyPatch(patch)) return { ok: true, entry: existing?.[service] ?? null };
-    const entry = service === "mal" ? await updateMalEntry(id, patch) : await saveAniListEntry(id, patch);
-    return { ok: true, entry };
+    if (service === "mal" && target.malId !== null) return { ok: true, entry: await updateMalEntry(target.malId, patch) };
+    if (service === "anilist" && target.anilistId !== null) {
+      return { ok: true, entry: await saveAniListEntry(target.anilistId, patch) };
+    }
+    return {
+      ok: true,
+      entry: await saveSimklEntry(simklWriteTarget(target), existing?.simkl ?? null, patch, target.total),
+    };
   };
 
-  const [malResult, anilistResult] = await Promise.allSettled([run("mal"), run("anilist")]);
+  // Simkl calls are slow (one POST per 1.1 s) but independent from MAL / AniList: run all in parallel.
+  const [malResult, anilistResult, simklResult] = await Promise.allSettled([run("mal"), run("anilist"), run("simkl")]);
   const mal = malResult.status === "fulfilled" ? malResult.value : failure(malResult.reason);
   const anilist = anilistResult.status === "fulfilled" ? anilistResult.value : failure(anilistResult.reason);
+  const simkl = simklResult.status === "fulfilled" ? simklResult.value : failure(simklResult.reason);
+
+  const simklTouched = patches.simkl !== undefined && !simkl.skipped;
+  refreshCaches(target, simklTouched);
 
   if (existing) {
     const states: Partial<Record<ServiceName, EntryState | null>> = {};
     if (mal.ok && !mal.skipped && mal.entry !== undefined) states.mal = mal.entry;
     if (anilist.ok && !anilist.skipped && anilist.entry !== undefined) states.anilist = anilist.entry;
-    const sources = globalForCache.__anisyncList?.payload.sources ?? { mal: false, anilist: false };
-    updateCachedEntry(ids.malId, ids.anilistId, (entry) => withStates(entry, states, sources));
+    if (simkl.ok && !simkl.skipped && simkl.entry !== undefined) states.simkl = simkl.entry;
+    const sources = globalForCache.__anisyncList?.payload.sources ?? NO_SOURCES;
+    updateCachedEntry(existing, (entry) => withStates(entry, states, sources));
   } else {
     invalidateList();
   }
 
-  return { ...ids, mal, anilist };
+  return {
+    key: target.key,
+    malId: target.malId,
+    anilistId: target.anilistId,
+    simklId: target.simklId,
+    mal,
+    anilist,
+    simkl,
+  };
 }
 
 const NEW_ENTRY: EntryState = { status: "plan_to_watch", progress: 0, score: 0, updatedAt: null, entryId: null };
 
+function targetOf(
+  ref: EntryRef,
+  existing: MergedEntry | undefined,
+  ids: { malId: number | null; anilistId: number | null },
+): WriteTarget {
+  const kind: MediaKind = existing?.kind ?? ref.simkl?.kind ?? "anime";
+  const simklId = existing?.simklId ?? ref.simkl?.id ?? null;
+  return {
+    key: existing?.key ?? keyFor(kind, ids.malId, ids.anilistId, simklId),
+    kind,
+    malId: ids.malId,
+    anilistId: ids.anilistId,
+    simklId,
+    total: existing?.totalEpisodes ?? null,
+    nextEpisode: existing?.nextEpisode ?? null,
+    lastEpisode: existing?.lastEpisode ?? null,
+  };
+}
+
 /**
- * Applies a patch on both services (or on `targets` only).
+ * Applies a patch on every service (or on `targets` only).
  * Sides that already have the entry receive only the patch fields; a missing side
- * is created with the full state so both lists end up identical.
+ * is created with the full state so all lists end up identical.
+ * Shows and movies only ever live on Simkl.
  */
-export async function writeEntry(input: {
-  malId: number | null;
-  anilistId: number | null;
-  patch: EntryPatch;
-  targets?: ServiceName[];
-}): Promise<WriteResult> {
+export async function writeEntry(input: EntryRef & { patch: EntryPatch; targets?: ServiceName[] }): Promise<WriteResult> {
   const list = await getMergedList();
-  const existing = findEntry(list, input.malId, input.anilistId);
-  const ids = await completeIds(input.malId, input.anilistId, existing);
-  const total = existing?.totalEpisodes ?? null;
+  const existing = findEntry(list, input);
+  const kind: MediaKind = existing?.kind ?? input.simkl?.kind ?? "anime";
+  const ids =
+    kind === "anime"
+      ? await completeIds(input.malId ?? null, input.anilistId ?? null, existing)
+      : { malId: null, anilistId: null };
+  const target = targetOf(input, existing, ids);
   const base = existing ? (displayState(existing) ?? NEW_ENTRY) : NEW_ENTRY;
-  const target = applyPatch(base, input.patch, total);
-  const targets = input.targets ?? ["mal", "anilist"];
+  const wanted = applyPatch(base, input.patch, target.total);
+  const allowed = defaultTargets(kind);
+  const targets = (input.targets ?? allowed).filter((t) => allowed.includes(t));
 
   const patches: PerServicePatch = {};
   for (const service of targets) {
     const side = existing?.[service] ?? null;
-    patches[service] = side ? normalized(input.patch, total) : patchBetween(null, target);
+    patches[service] = side ? normalized(input.patch, target.total) : patchBetween(null, wanted);
   }
-  return applyPatches(ids, patches, existing);
+  return applyPatches(target, patches, existing);
 }
 
 function normalized(patch: EntryPatch, total: number | null): EntryPatch {
@@ -288,39 +403,60 @@ function normalized(patch: EntryPatch, total: number | null): EntryPatch {
   return out;
 }
 
-export type AlignSource = "mal" | "anilist" | "max";
+export type AlignSource = ServiceName | "max";
 
-export async function alignEntry(malId: number, source: AlignSource): Promise<WriteResult> {
-  const list = await getMergedList();
-  const existing = findEntry(list, malId, null);
-  if (!existing) throw new ServiceError(source === "anilist" ? "anilist" : "mal", 404, "Entrée introuvable");
-
-  let target: EntryState | null;
-  if (source === "max") {
-    target = existing.mal && existing.anilist ? maxState(existing.mal, existing.anilist) : displayState(existing);
-  } else {
-    target = existing[source];
-  }
-  if (!target) throw new ServiceError(source === "anilist" ? "anilist" : "mal", 400, "Aucune donnée à copier");
-
-  const ids = await completeIds(existing.malId, existing.anilistId, existing);
-  const patches: PerServicePatch = {};
-  for (const service of ["mal", "anilist"] as const) {
-    if (source === service) continue;
-    patches[service] = patchBetween(existing[service], target);
-  }
-  return applyPatches(ids, patches, existing);
+/** Drops a status change that only differs by watching / rewatching (Simkl has no rewatching). */
+function withoutEquivalentStatus(current: EntryState | null, target: EntryState, patch: EntryPatch): EntryPatch {
+  if (!current || patch.status === undefined) return patch;
+  if (diffWithSimkl(current, target).includes("status")) return patch;
+  const { status: _status, ...rest } = patch;
+  return rest;
 }
 
-export async function removeEntry(input: {
-  malId: number | null;
-  anilistId: number | null;
-  targets?: ServiceName[];
-}): Promise<WriteResult> {
+/** Copies one service's state (or the most advanced one) onto the others. Anime only. */
+export async function alignEntry(key: string, source: AlignSource): Promise<WriteResult> {
   const list = await getMergedList();
-  const existing = findEntry(list, input.malId, input.anilistId);
-  const ids = { malId: input.malId ?? existing?.malId ?? null, anilistId: input.anilistId ?? existing?.anilistId ?? null };
-  const targets = input.targets ?? ["mal", "anilist"];
+  const existing = findEntry(list, { key });
+  const sourceService: ServiceName = source === "max" ? "mal" : source;
+  if (!existing) throw new ServiceError(sourceService, 404, "Entrée introuvable");
+  if (existing.kind !== "anime") throw new ServiceError("simkl", 400, "Seuls les anime peuvent être alignés");
+
+  let state: EntryState | null;
+  if (source === "max") {
+    const states = [existing.mal, existing.anilist, existing.simkl].filter((s): s is EntryState => s !== null);
+    const [first, ...others] = states;
+    state = first ? maxState(first, ...others) : null;
+  } else {
+    state = existing[source];
+  }
+  if (!state) throw new ServiceError(sourceService, 400, "Aucune donnée à copier");
+
+  const ids = await completeIds(existing.malId, existing.anilistId, existing);
+  const target = targetOf({ key }, existing, ids);
+  const patches: PerServicePatch = {};
+  for (const service of ALL_SERVICES) {
+    if (source === service) continue;
+    const patch = patchBetween(existing[service], state);
+    patches[service] =
+      service === "simkl" || source === "simkl" ? withoutEquivalentStatus(existing[service], state, patch) : patch;
+  }
+  return applyPatches(target, patches, existing);
+}
+
+export async function removeEntry(input: EntryRef & { targets?: ServiceName[] }): Promise<WriteResult> {
+  const list = await getMergedList();
+  const existing = findEntry(list, input);
+  const kind: MediaKind = existing?.kind ?? input.simkl?.kind ?? "anime";
+  const ids =
+    kind === "anime"
+      ? {
+          malId: input.malId ?? existing?.malId ?? null,
+          anilistId: input.anilistId ?? existing?.anilistId ?? null,
+        }
+      : { malId: null, anilistId: null };
+  const target = targetOf(input, existing, ids);
+  const allowed = defaultTargets(kind);
+  const targets = (input.targets ?? allowed).filter((t) => allowed.includes(t));
   const connections = getConnectionInfos();
 
   const removeMal = async (): Promise<ServiceResult> => {
@@ -336,34 +472,70 @@ export async function removeEntry(input: {
     await deleteAniListEntry(entryId);
     return { ok: true, entry: null };
   };
+  const removeSimkl = async (): Promise<ServiceResult> => {
+    if (!targets.includes("simkl") || !connections.simkl || !isSimklEnabled()) return SKIPPED;
+    // Nothing to remove when the entry is known and absent from Simkl.
+    if (existing ? existing.simkl === null : input.simkl === undefined) return SKIPPED;
+    await removeSimklEntry(simklWriteTarget(target));
+    return { ok: true, entry: null };
+  };
 
-  const [malResult, anilistResult] = await Promise.allSettled([removeMal(), removeAniList()]);
+  const [malResult, anilistResult, simklResult] = await Promise.allSettled([removeMal(), removeAniList(), removeSimkl()]);
   const mal = malResult.status === "fulfilled" ? malResult.value : failure(malResult.reason);
   const anilist = anilistResult.status === "fulfilled" ? anilistResult.value : failure(anilistResult.reason);
+  const simkl = simklResult.status === "fulfilled" ? simklResult.value : failure(simklResult.reason);
 
-  const sources = globalForCache.__anisyncList?.payload.sources ?? { mal: false, anilist: false };
-  updateCachedEntry(ids.malId, ids.anilistId, (entry) => {
-    const next = withStates(
-      entry,
-      { ...(mal.ok && !mal.skipped ? { mal: null } : {}), ...(anilist.ok && !anilist.skipped ? { anilist: null } : {}) },
-      sources,
-    );
-    return next.mal || next.anilist ? next : null;
-  });
+  refreshCaches(target, !simkl.skipped);
 
-  return { ...ids, mal, anilist };
+  if (existing) {
+    const sources = globalForCache.__anisyncList?.payload.sources ?? NO_SOURCES;
+    updateCachedEntry(existing, (entry) => {
+      const next = withStates(
+        entry,
+        {
+          ...(mal.ok && !mal.skipped ? { mal: null } : {}),
+          ...(anilist.ok && !anilist.skipped ? { anilist: null } : {}),
+          ...(simkl.ok && !simkl.skipped ? { simkl: null } : {}),
+        },
+        sources,
+      );
+      return next.mal || next.anilist || next.simkl ? next : null;
+    });
+  }
+
+  return {
+    key: target.key,
+    malId: ids.malId,
+    anilistId: ids.anilistId,
+    simklId: target.simklId,
+    mal,
+    anilist,
+    simkl,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
 
-export interface AnnotatedSearchResult extends SearchResult {
+export type AnimeSearchResult = SearchResult & { kind: "anime"; key: string; inList: boolean };
+
+export interface SimklSearchResult {
+  kind: "show" | "movie";
+  simklId: number;
+  title: string;
+  year: number | null;
+  cover: string | null;
+  totalEpisodes: number | null;
   key: string;
   inList: boolean;
 }
 
-export async function search(q: string): Promise<AnnotatedSearchResult[]> {
+export type AnnotatedSearchResult = AnimeSearchResult | SimklSearchResult;
+
+export async function search(q: string, kind: MediaKind = "anime"): Promise<AnnotatedSearchResult[]> {
+  if (kind !== "anime") return searchSimklTitles(q, kind);
+
   const [results, list] = await Promise.all([searchAnime(q), getMergedList().catch(() => null)]);
   const malIds = new Set<number>();
   const anilistIds = new Set<number>();
@@ -373,7 +545,29 @@ export async function search(q: string): Promise<AnnotatedSearchResult[]> {
   }
   return results.map((r) => ({
     ...r,
+    kind: "anime" as const,
     key: entryKey(r.malId, r.anilistId),
     inList: anilistIds.has(r.anilistId) || (r.malId !== null && malIds.has(r.malId)),
+  }));
+}
+
+async function searchSimklTitles(q: string, kind: "show" | "movie"): Promise<SimklSearchResult[]> {
+  if (!getConnectionInfos().simkl || !isSimklEnabled()) {
+    throw new ServiceError("simkl", 400, "Simkl n'est pas connecté", "not_connected");
+  }
+  const [hits, list] = await Promise.all([searchSimkl(q, kind), getMergedList().catch(() => null)]);
+  const known = new Set<number>();
+  for (const e of list?.entries ?? []) {
+    if (e.kind === kind && e.simklId !== null && e.simkl) known.add(e.simklId);
+  }
+  return hits.map((hit) => ({
+    kind,
+    simklId: hit.simklId,
+    title: hit.title,
+    year: hit.year,
+    cover: hit.cover,
+    totalEpisodes: hit.totalEpisodes,
+    key: simklKey(kind, hit.simklId),
+    inList: known.has(hit.simklId),
   }));
 }

@@ -29,7 +29,9 @@ export function notConnected(service: ServiceName): ServiceError {
 }
 
 export function serviceLabel(service: ServiceName): string {
-  return service === "mal" ? "MyAnimeList" : "AniList";
+  if (service === "mal") return "MyAnimeList";
+  if (service === "simkl") return "Simkl";
+  return "AniList";
 }
 
 /** Short French message safe to show in the UI. */

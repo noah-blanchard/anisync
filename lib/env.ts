@@ -19,6 +19,8 @@ const envSchema = z.object({
   MAL_CLIENT_SECRET: optional,
   ANILIST_CLIENT_ID: required("ANILIST_CLIENT_ID"),
   ANILIST_CLIENT_SECRET: required("ANILIST_CLIENT_SECRET"),
+  SIMKL_CLIENT_ID: optional,
+  SIMKL_CLIENT_SECRET: optional,
   DATABASE_PATH: z.string().trim().min(1).default("./data/anisync.db"),
 });
 
@@ -46,9 +48,15 @@ export function redirectUris(env: Env = getEnv()) {
   return {
     mal: `${env.APP_URL}/api/auth/mal/callback`,
     anilist: `${env.APP_URL}/api/auth/anilist/callback`,
+    simkl: `${env.APP_URL}/api/auth/simkl/callback`,
   };
 }
 
 export function isSecureUrl(env: Env = getEnv()): boolean {
   return env.APP_URL.startsWith("https://");
+}
+
+/** Simkl is optional: it is enabled as soon as a client id is configured. */
+export function isSimklEnabled(env: Env = getEnv()): boolean {
+  return Boolean(env.SIMKL_CLIENT_ID);
 }

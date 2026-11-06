@@ -3,9 +3,10 @@
 import { ArrowUpWideNarrowIcon } from "lucide-react";
 import { useOverlay } from "@/components/overlay-context";
 import { Button } from "@/components/ui/button";
+import { useList } from "@/hooks/use-list";
 import { useEntryActions } from "@/hooks/use-entry-actions";
 import { scoreLabel, SERVICE_LABELS, STATUS_LABELS } from "@/lib/labels";
-import type { EntryState, ServiceName, SyncField } from "@/lib/mapping";
+import { ALL_SERVICES, type EntryState, type ServiceName, type SyncField } from "@/lib/mapping";
 import type { MergedEntry } from "@/lib/merge";
 import { cn } from "@/lib/utils";
 
@@ -35,28 +36,33 @@ function Column({ service, state, diff }: { service: ServiceName; state: EntrySt
   );
 }
 
-/** MAL vs AniList side by side with the three alignment choices. */
+/** Anime states side by side (2 or 3 services) with one "keep" button per available state, plus "max". */
 export function CompareView({ entry }: { entry: MergedEntry }) {
   const { close } = useOverlay();
   const { align, aligning } = useEntryActions(entry.key);
-  const run = (source: "mal" | "anilist" | "max") => {
+  const { data } = useList();
+  // One column per service that holds the anime or is connected.
+  const services = ALL_SERVICES.filter((s) => entry[s] !== null || Boolean(data?.connections[s]));
+  const run = (source: ServiceName | "max") => {
     align({ source });
     close();
   };
 
   return (
     <div className="flex flex-col gap-4 p-5 pt-2 md:p-0">
-      <div className="grid grid-cols-2 gap-3">
-        <Column service="mal" state={entry.mal} diff={entry.diff} />
-        <Column service="anilist" state={entry.anilist} diff={entry.diff} />
+      <div className={cn("grid gap-3", services.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
+        {services.map((service) => (
+          <Column key={service} service={service} state={entry[service]} diff={entry.diff} />
+        ))}
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <Button variant="outline" disabled={aligning || !entry.mal} onClick={() => run("mal")}>
-          Garder MAL
-        </Button>
-        <Button variant="outline" disabled={aligning || !entry.anilist} onClick={() => run("anilist")}>
-          Garder AniList
-        </Button>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {services
+          .filter((service) => entry[service] !== null)
+          .map((service) => (
+            <Button key={service} variant="outline" disabled={aligning} onClick={() => run(service)}>
+              Garder {SERVICE_LABELS[service]}
+            </Button>
+          ))}
         <Button disabled={aligning} onClick={() => run("max")}>
           <ArrowUpWideNarrowIcon />
           Prendre le max
