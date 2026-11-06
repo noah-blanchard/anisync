@@ -1,8 +1,8 @@
 {
   "name": "anisync",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
-  "description": "Suivi d'anime synchronisé entre MyAnimeList et AniList",
+  "description": "Suivi d'anime, de séries et de films synchronisé entre MyAnimeList, AniList et Simkl",
   "license": "MIT",
   "packageManager": "pnpm@11.13.0",
   "engines": {

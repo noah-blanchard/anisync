@@ -9,6 +9,17 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.10.0",
+    date: "2026-11-06",
+    title: "Séries, films et Simkl",
+    changes: [
+      "Connecte Simkl dans Paramètres : tes anime y sont synchronisés en même temps que sur MyAnimeList et AniList.",
+      "Suis aussi tes séries et tes films : recherche-les dans Ajouter, +1 marque l'épisode suivant, et un bouton « Vu » pour les films.",
+      "Nouveau filtre Tout / Anime / Séries / Films sur l'accueil et dans la bibliothèque.",
+      "« Tout vérifier » et la comparaison incluent Simkl : « Absent sur Simkl », « Garder Simkl ».",
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-10-28",
     title: "Historique, comparaison et Wrapped",
