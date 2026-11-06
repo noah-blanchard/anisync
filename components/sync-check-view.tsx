@@ -10,17 +10,13 @@ import { Button } from "@/components/ui/button";
 import { setEntry, useList } from "@/hooks/use-list";
 import { api, type WriteResult } from "@/lib/client-api";
 import { accentStyle } from "@/lib/color";
-import { SERVICE_LABELS } from "@/lib/labels";
-import { diffStates } from "@/lib/mapping";
+import { SLOT_LABELS } from "@/lib/labels";
 import type { MergedEntry } from "@/lib/merge";
 
 const DELAY_MS = 1100;
 
 function describe(entry: MergedEntry): string {
-  if (entry.missingOn) return `Absent sur ${SERVICE_LABELS[entry.missingOn]}`;
-  // MAL and AniList agree: only the Simkl mirror is behind.
-  const mirrorOnly = !entry.mal || !entry.anilist || diffStates(entry.mal, entry.anilist).length === 0;
-  if (mirrorOnly) return "Simkl à mettre à jour";
+  if (entry.missingOn) return `Absent sur ${SLOT_LABELS[entry.missingOn]}`;
   const labels = { status: "statut", progress: "progression", score: "note" } as const;
   return `Diffère : ${entry.diff.map((d) => labels[d]).join(", ")}`;
 }
@@ -60,12 +56,8 @@ export function SyncCheckView() {
             result.anilist.ok && !result.anilist.skipped && result.anilist.entry !== undefined
               ? result.anilist.entry
               : current.anilist,
-          simkl:
-            result.simkl.ok && !result.simkl.skipped && result.simkl.entry !== undefined
-              ? result.simkl.entry
-              : current.simkl,
         }));
-        if (!result.mal.ok || !result.anilist.ok || !result.simkl.ok) failures++;
+        if (!result.mal.ok || !result.anilist.ok) failures++;
       } catch {
         failures++;
       }
@@ -82,7 +74,7 @@ export function SyncCheckView() {
       <div className="flex flex-col items-center gap-2 px-5 py-10 text-center md:px-0">
         <CheckCircle2Icon className="size-10 text-success" aria-hidden />
         <p className="font-medium">Tout est synchronisé</p>
-        <p className="text-sm text-muted-foreground">Simkl recopie bien MAL et AniList.</p>
+        <p className="text-sm text-muted-foreground">MAL et AniList sont alignés.</p>
       </div>
     );
   }

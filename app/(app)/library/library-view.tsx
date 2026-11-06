@@ -47,7 +47,7 @@ export function LibraryView() {
     if (params.get("focus") === "search") searchRef.current?.focus();
   }, [params]);
 
-  const kindAvailable = Boolean(data?.connections.simkl);
+  const kindAvailable = Boolean(data?.tmdbEnabled || data?.entries.some((e) => e.kind !== "anime"));
   const [kind, setKind] = useKindFilter(kindAvailable);
   const kindCounts = React.useMemo(() => countKinds(data?.entries ?? []), [data]);
 

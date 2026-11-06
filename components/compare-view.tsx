@@ -5,8 +5,8 @@ import { useOverlay } from "@/components/overlay-context";
 import { Button } from "@/components/ui/button";
 import { useList } from "@/hooks/use-list";
 import { useEntryActions } from "@/hooks/use-entry-actions";
-import { scoreLabel, SERVICE_LABELS, STATUS_LABELS } from "@/lib/labels";
-import { ALL_SERVICES, type EntryState, type ServiceName, type SyncField } from "@/lib/mapping";
+import { scoreLabel, SLOT_LABELS, STATUS_LABELS } from "@/lib/labels";
+import { ANIME_SERVICES, type EntryState, type ServiceName, type SyncField } from "@/lib/mapping";
 import type { MergedEntry } from "@/lib/merge";
 import { cn } from "@/lib/utils";
 
@@ -20,8 +20,7 @@ function Column({ service, state, diff }: { service: ServiceName; state: EntrySt
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3">
       <div className="text-sm font-semibold">
-        {SERVICE_LABELS[service]}
-        {service === "simkl" && " (miroir)"}
+        {SLOT_LABELS[service]}
       </div>
       {state ? (
         FIELDS.map(({ field, label, format }) => (
@@ -40,16 +39,15 @@ function Column({ service, state, diff }: { service: ServiceName; state: EntrySt
 }
 
 /**
- * Anime states side by side. MAL and AniList are the sources of truth (one "keep" button each, plus "max");
- * Simkl is a mirror column that is updated from them and can never be kept.
+ * Anime states side by side. MAL and AniList are the sources of truth (one "keep" button each, plus "max").
  */
 export function CompareView({ entry }: { entry: MergedEntry }) {
   const { close } = useOverlay();
   const { align, aligning } = useEntryActions(entry.key);
   const { data } = useList();
   // One column per service that holds the anime or is connected.
-  const services = ALL_SERVICES.filter((s) => entry[s] !== null || Boolean(data?.connections[s]));
-  const run = (source: Exclude<ServiceName, "simkl"> | "max") => {
+  const services = ANIME_SERVICES.filter((s) => entry[s] !== null || Boolean(data?.connections[s]));
+  const run = (source: ServiceName | "max") => {
     align({ source });
     close();
   };
@@ -57,19 +55,19 @@ export function CompareView({ entry }: { entry: MergedEntry }) {
   return (
     <div className="flex flex-col gap-4 p-5 pt-2 md:p-0">
       <p className="text-sm text-muted-foreground">
-        MAL et AniList font foi. Simkl n&apos;est qu&apos;un miroir : il est mis à jour d&apos;après eux, jamais l&apos;inverse.
+        Compare l&apos;état de l&apos;anime sur MAL et AniList, puis garde l&apos;un des deux ou prends le plus avancé.
       </p>
-      <div className={cn("grid gap-3", services.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
+      <div className={cn("grid gap-3", "grid-cols-2")}>
         {services.map((service) => (
           <Column key={service} service={service} state={entry[service]} diff={entry.diff} />
         ))}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {services
-          .filter((service): service is Exclude<ServiceName, "simkl"> => service !== "simkl" && entry[service] !== null)
+          .filter((service) => entry[service] !== null)
           .map((service) => (
             <Button key={service} variant="outline" disabled={aligning} onClick={() => run(service)}>
-              Garder {SERVICE_LABELS[service]}
+              Garder {SLOT_LABELS[service]}
             </Button>
           ))}
         <Button disabled={aligning} onClick={() => run("max")}>

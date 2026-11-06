@@ -1,6 +1,5 @@
 import "server-only";
-import { ServiceError } from "./errors";
-import type { ServiceName } from "./mapping";
+import { ServiceError, type ErrorSource } from "./errors";
 
 const TIMEOUT_MS = 10_000;
 const MAX_429_RETRIES = 2;
@@ -28,7 +27,7 @@ function retryAfterMs(res: Response, attempt: number): number {
 }
 
 /** One concise line per failed external call: service, call, status, duration. */
-export function logFailure(service: ServiceName, label: string, status: number | string, startedAt: number) {
+export function logFailure(service: ErrorSource, label: string, status: number | string, startedAt: number) {
   console.warn(`[anisync] ${service} ${label} -> ${status} (${Date.now() - startedAt}ms)`);
 }
 
@@ -36,7 +35,7 @@ export function logFailure(service: ServiceName, label: string, status: number |
  * fetch with a 10s timeout per attempt, Retry-After aware retries on 429 (max 2)
  * and one retry on 5xx / network errors. Returns the final Response (which may be non-2xx).
  */
-export async function fetchWithRetry(service: ServiceName, url: string, options: RequestOptions): Promise<Response> {
+export async function fetchWithRetry(service: ErrorSource, url: string, options: RequestOptions): Promise<Response> {
   const { label, ...init } = options;
   let rateLimitRetries = 0;
   let serverRetries = 0;

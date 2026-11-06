@@ -35,7 +35,7 @@ export function HomeView() {
     }
   }, [refreshList]);
 
-  const kindAvailable = Boolean(data?.connections.simkl);
+  const kindAvailable = Boolean(data?.tmdbEnabled || data?.entries.some((e) => e.kind !== "anime"));
   const [kind, setKind] = useKindFilter(kindAvailable);
 
   const active = React.useMemo(

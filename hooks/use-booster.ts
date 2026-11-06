@@ -5,7 +5,7 @@ import { useCallback, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { BoosterCard } from "@/lib/booster";
 import { api, type WriteResult } from "@/lib/client-api";
-import type { ServiceName } from "@/lib/mapping";
+import type { Slot } from "@/lib/mapping";
 import { reportResult, useAddEntry } from "./use-entry-actions";
 import { LIST_KEY } from "./use-list";
 
@@ -131,7 +131,7 @@ export function useBoosterSwipes() {
   const add = useAddEntry({ quiet: true });
   const pending = useRef(new Map<number, Promise<WriteResult | null>>());
 
-  const remove = useMutation<WriteResult, Error, { card: BoosterCard; targets?: ServiceName[] }>({
+  const remove = useMutation<WriteResult, Error, { card: BoosterCard; targets?: Slot[] }>({
     mutationFn: ({ card, targets }) =>
       api<WriteResult>("/api/entry", {
         method: "DELETE",

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { AlertTriangleIcon, ImageOffIcon } from "lucide-react";
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
-import { SERVICE_LABELS } from "@/lib/labels";
+import { SLOT_LABELS } from "@/lib/labels";
 import type { MergedEntry } from "@/lib/merge";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +87,7 @@ export function ProgressBar({ value, total, className }: { value: number; total:
   );
 }
 
-/** Sync state badges: "Désynchronisé" (clickable), "MAL / AniList / Simkl uniquement". Nothing for shows and movies. */
+/** Sync state badges: "Désynchronisé" (clickable), "MAL / AniList uniquement". Nothing for shows and movies. */
 export function SyncBadges({
   entry,
   onCompare,
@@ -100,7 +100,7 @@ export function SyncBadges({
   if (entry.kind !== "anime") return null;
   const badges: React.ReactNode[] = [];
   if (!entry.inSync) {
-    const label = entry.missingOn ? `Absent sur ${SERVICE_LABELS[entry.missingOn]}` : "Désynchronisé";
+    const label = entry.missingOn ? `Absent sur ${SLOT_LABELS[entry.missingOn]}` : "Désynchronisé";
     badges.push(
       onCompare ? (
         <Badge key="sync" variant="warning" asChild>

@@ -9,6 +9,16 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.11.0",
+    date: "2026-11-06",
+    title: "Séries et films, sans Simkl",
+    changes: [
+      "Simkl est retiré : plus de connexion ni de compte externe, tes anime restent synchronisés sur MyAnimeList et AniList.",
+      "Tes séries et tes films sont suivis directement dans AniSync : recherche via TMDB, +1 sur l'épisode suivant, « À jour » et date de la prochaine diffusion.",
+      "Les séries et films que tu suivais via Simkl ne sont pas repris : ajoute-les de nouveau depuis Ajouter.",
+    ],
+  },
+  {
     version: "1.10.1",
     date: "2026-11-06",
     title: "Simkl ne modifie plus tes anime",

@@ -24,7 +24,6 @@ import { cn } from "@/lib/utils";
 const SERVICES: { id: ServiceName; name: string; site: string }[] = [
   { id: "mal", name: "MyAnimeList", site: "https://myanimelist.net/apiconfig" },
   { id: "anilist", name: "AniList", site: "https://anilist.co/settings/developer" },
-  { id: "simkl", name: "Simkl", site: "https://simkl.com/settings/developer/" },
 ];
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -64,7 +63,7 @@ function ConnectionCard({ service, info }: { service: (typeof SERVICES)[number];
   const [now] = React.useState(() => Date.now());
   const days = info ? daysUntil(info.expiresAt, now) : null;
 
-  // MAL and Simkl tokens refresh automatically: only AniList expiry needs attention.
+  // MAL tokens refresh automatically: only AniList expiry needs attention.
   const status = !info
     ? { label: "Non connecté", variant: "secondary" as const }
     : service.id === "anilist" && days !== null && days <= 0
@@ -245,14 +244,14 @@ function BoosterSection() {
 export function SettingsView({
   connections,
   redirectUris,
-  simklEnabled,
+  tmdbEnabled,
   appUrl,
   qrSvg,
   version,
 }: {
   connections: Record<ServiceName, ConnectionInfo | null>;
   redirectUris: Record<ServiceName, string>;
-  simklEnabled: boolean;
+  tmdbEnabled: boolean;
   appUrl: string;
   qrSvg: string;
   version: string;
@@ -285,7 +284,7 @@ export function SettingsView({
       <PageHeader title="Paramètres" />
 
       <Section title="Comptes" description="Les jetons sont chiffrés sur ton serveur et ne quittent jamais le backend.">
-        {SERVICES.filter((service) => service.id !== "simkl" || simklEnabled).map((service) => (
+        {SERVICES.map((service) => (
           <ConnectionCard key={service.id} service={service} info={connections[service.id]} />
         ))}
         {iosApp && (
@@ -300,27 +299,45 @@ export function SettingsView({
 
       <Section
         title="Redirect URIs"
-        description={`À renseigner dans la configuration de tes applications OAuth MyAnimeList${simklEnabled ? ", AniList et Simkl" : " et AniList"}.`}
+        description="À renseigner dans la configuration de tes applications OAuth MyAnimeList et AniList."
       >
         <CopyField label="MyAnimeList" value={redirectUris.mal} />
         <CopyField label="AniList" value={redirectUris.anilist} />
-        {simklEnabled && (
-          <>
-            <CopyField label="Simkl" value={redirectUris.simkl} />
-            <p className="text-sm text-muted-foreground">
-              Crée ton application Simkl sur{" "}
-              <a
-                href="https://simkl.com/settings/developer/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-foreground underline underline-offset-4"
-              >
-                simkl.com/settings/developer
-              </a>{" "}
-              pour obtenir ton identifiant client.
-            </p>
-          </>
+      </Section>
+
+      <Section title="Séries et films">
+        {tmdbEnabled ? (
+          <p className="text-sm text-muted-foreground">
+            Recherche TMDB active. Tes séries et films sont suivis dans AniSync (base locale) : pense à sauvegarder{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-foreground">/data</code>.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Pour rechercher et ajouter des séries et des films, renseigne{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-foreground">TMDB_API_KEY</code> (clé API v3 ou jeton de
+            lecture v4, disponible sur{" "}
+            <a
+              href="https://www.themoviedb.org/settings/api"
+              target="_blank"
+              rel="noreferrer"
+              className="text-foreground underline underline-offset-4"
+            >
+              themoviedb.org/settings/api
+            </a>
+            ) puis redéploie. Les titres déjà suivis continuent de fonctionner.
+          </p>
         )}
+        <p className="text-xs text-muted-foreground">
+          Ce produit utilise l&apos;API TMDB mais n&apos;est ni approuvé ni certifié par TMDB.{" "}
+          <a
+            href="https://www.themoviedb.org"
+            target="_blank"
+            rel="noreferrer"
+            className="text-foreground underline underline-offset-4"
+          >
+            themoviedb.org
+          </a>
+        </p>
       </Section>
 
       <Section title="Apparence">

@@ -1,13 +1,13 @@
 /**
- * Pure merge of the MAL, AniList and Simkl lists into one list.
+ * Pure merge of the MAL and AniList lists (anime) and the local shows / movies into one list.
  * Unit-tested in tests/merge.test.ts.
  */
 import {
   diffStates,
-  diffWithSimkl,
   normalizeTotal,
   animeMaxState,
   type EntryState,
+  type LocalKind,
   type MediaKind,
   type ServiceName,
   type SyncField,
@@ -47,9 +47,9 @@ export interface AniListListItem {
  * - mal_only: confirmed that AniList has no media with this idMal
  * - anilist_only: the AniList media has no idMal
  */
-export type Availability = "both" | "mal_only" | "anilist_only" | "simkl_only";
+export type Availability = "both" | "mal_only" | "anilist_only" | "local";
 
-/** A season / episode pointer (shows only), with the episode title when Simkl gives one. */
+/** A season / episode pointer (shows only); title is null with TMDB (kept for the UI). */
 export interface EpisodeRef {
   season: number;
   episode: number;
@@ -57,22 +57,24 @@ export interface EpisodeRef {
 }
 
 /**
- * One item of the Simkl library.
- * state.progress = watched_episodes_count, except for movies: 1 when completed, 0 otherwise.
- * state.score = user_rating ?? 0, state.updatedAt = most recent of the watch / rating / add dates.
+ * One show or movie tracked in AniSync, enriched with TMDB details when available.
+ * state.progress = watched episodes, except for movies: 1 when completed, 0 otherwise.
  */
-export interface SimklListItem {
-  simklId: number;
-  kind: MediaKind;
-  malId: number | null;
-  anilistId: number | null;
+export interface LocalListItem {
+  tmdbId: number;
+  kind: LocalKind;
   title: string;
+  originalTitle: string | null;
   cover: string | null;
   year: number | null;
+  /** shows: known regular episodes (season >= 1); movies: 1 */
   totalEpisodes: number | null;
-  animeType: string | null;
+  /** shows only, null = up to date or unknown */
   nextEpisode: EpisodeRef | null;
+  /** shows only */
   lastEpisode: EpisodeRef | null;
+  /** shows only, episode = absolute index */
+  nextAiring: NextAiring | null;
   state: EntryState;
 }
 
@@ -81,7 +83,7 @@ export interface MergedEntry {
   kind: MediaKind;
   malId: number | null;
   anilistId: number | null;
-  simklId: number | null;
+  tmdbId: number | null;
   title: string;
   englishTitle: string | null;
   cover: string | null;
@@ -95,7 +97,8 @@ export interface MergedEntry {
   lastEpisode: EpisodeRef | null;
   mal: EntryState | null;
   anilist: EntryState | null;
-  simkl: EntryState | null;
+  /** AniSync tracking, shows and movies only */
+  local: EntryState | null;
   availability: Availability;
   /** Service where the title exists but is absent from my list (only when the services are connected) */
   missingOn: ServiceName | null;
@@ -109,8 +112,8 @@ export interface MergeInput {
   /** null = service not connected (or list unavailable) */
   mal: MalListItem[] | null;
   anilist: AniListListItem[] | null;
-  /** null = Simkl not connected / not configured (or list unavailable) */
-  simkl: SimklListItem[] | null;
+  /** Shows and movies tracked in AniSync (never null: the database is always available) */
+  local: LocalListItem[];
   /** id_map cache: malId -> anilistId, null when confirmed that no AniList match exists */
   idMap: ReadonlyMap<number, number | null>;
 }
@@ -120,23 +123,22 @@ export function entryKey(malId: number | null, anilistId: number | null): string
   return `al:${anilistId ?? 0}`;
 }
 
-/** Key of an entry that only exists on Simkl (shows, movies, anime without MAL / AniList id). */
-export function simklKey(kind: MediaKind, simklId: number): string {
-  return `simkl:${kind}:${simklId}`;
+/** Key of a show or movie tracked locally. */
+export function tmdbKey(kind: LocalKind, tmdbId: number): string {
+  return `tmdb:${kind}:${tmdbId}`;
 }
 
 type SyncFields = Pick<MergedEntry, "inSync" | "diff" | "missingOn" | "updatedAt">;
 
 /** Recomputes the derived sync fields of an entry (used after optimistic updates as well). */
 export function computeSync(
-  entry: Pick<MergedEntry, "kind" | "mal" | "anilist" | "simkl" | "availability">,
-  connected: { mal: boolean; anilist: boolean; simkl: boolean },
+  entry: Pick<MergedEntry, "kind" | "mal" | "anilist" | "local" | "availability">,
+  connected: { mal: boolean; anilist: boolean },
 ): SyncFields {
-  // Shows and movies live on Simkl only: nothing to compare.
+  // Shows and movies live in AniSync only: nothing to compare.
   if (entry.kind !== "anime") {
-    return { inSync: true, diff: [], missingOn: null, updatedAt: entry.simkl?.updatedAt ?? 0 };
+    return { inSync: true, diff: [], missingOn: null, updatedAt: entry.local?.updatedAt ?? 0 };
   }
-  // For anime only MAL / AniList count: a fresh Simkl import must not reorder or "refresh" entries.
   const updatedAt = Math.max(entry.mal?.updatedAt ?? 0, entry.anilist?.updatedAt ?? 0);
 
   let diff: SyncField[] = [];
@@ -149,25 +151,13 @@ export function computeSync(
     else if (entry.anilist) missingOn = "mal";
   }
 
-  // Simkl is a mirror: a difference only means that Simkl needs an update (the reference is MAL / AniList).
-  if (connected.simkl) {
-    const reference = animeTruthState(entry);
-    if (reference && entry.simkl) {
-      for (const field of diffWithSimkl(reference, entry.simkl)) {
-        if (!diff.includes(field)) diff.push(field);
-      }
-    } else if (reference) {
-      missingOn = missingOn ?? "simkl";
-    }
-  }
-
   return { inSync: diff.length === 0 && missingOn === null, diff, missingOn, updatedAt };
 }
 
 type EntryBase = Omit<MergedEntry, keyof SyncFields>;
 
 export function mergeLists(input: MergeInput): MergedEntry[] {
-  const connected = { mal: input.mal !== null, anilist: input.anilist !== null, simkl: input.simkl !== null };
+  const connected = { mal: input.mal !== null, anilist: input.anilist !== null };
   const reverseIdMap = new Map<number, number>();
   for (const [malId, anilistId] of input.idMap) {
     if (anilistId !== null) reverseIdMap.set(anilistId, malId);
@@ -190,7 +180,7 @@ export function mergeLists(input: MergeInput): MergedEntry[] {
       kind: "anime",
       malId,
       anilistId: al.anilistId,
-      simklId: null,
+      tmdbId: null,
       title: al.title || mal?.title || "Sans titre",
       englishTitle: al.englishTitle ?? mal?.englishTitle ?? null,
       cover: al.cover ?? mal?.cover ?? null,
@@ -203,7 +193,7 @@ export function mergeLists(input: MergeInput): MergedEntry[] {
       lastEpisode: null,
       mal: mal?.state ?? null,
       anilist: al.state,
-      simkl: null,
+      local: null,
       availability,
     });
   }
@@ -219,7 +209,7 @@ export function mergeLists(input: MergeInput): MergedEntry[] {
       kind: "anime",
       malId: mal.malId,
       anilistId,
-      simklId: null,
+      tmdbId: null,
       title: mal.title || "Sans titre",
       englishTitle: mal.englishTitle,
       cover: mal.cover,
@@ -232,62 +222,34 @@ export function mergeLists(input: MergeInput): MergedEntry[] {
       lastEpisode: null,
       mal: mal.state,
       anilist: null,
-      simkl: null,
+      local: null,
       availability,
     });
   }
 
-  // Simkl: anime attach to the entry with the same MAL id, then the same AniList id.
-  const byMal = new Map<number, EntryBase>();
-  const byAnilist = new Map<number, EntryBase>();
-  for (const entry of bases) {
-    if (entry.malId !== null && !byMal.has(entry.malId)) byMal.set(entry.malId, entry);
-    if (entry.anilistId !== null && !byAnilist.has(entry.anilistId)) byAnilist.set(entry.anilistId, entry);
-  }
-
-  for (const item of input.simkl ?? []) {
-    if (item.kind !== "anime") {
-      const isMovie = item.kind === "movie";
-      bases.push({
-        key: simklKey(item.kind, item.simklId),
-        kind: item.kind,
-        malId: null,
-        anilistId: null,
-        simklId: item.simklId,
-        title: item.title || "Sans titre",
-        englishTitle: null,
-        cover: item.cover,
-        color: null,
-        totalEpisodes: isMovie ? 1 : normalizeTotal(item.totalEpisodes),
-        format: null,
-        year: item.year,
-        nextAiring: null,
-        nextEpisode: isMovie ? null : item.nextEpisode,
-        lastEpisode: isMovie ? null : item.lastEpisode,
-        mal: null,
-        anilist: null,
-        simkl: item.state,
-        availability: "simkl_only",
-      });
-      continue;
-    }
-
-    const target =
-      (item.malId !== null ? byMal.get(item.malId) : undefined) ??
-      (item.anilistId !== null ? byAnilist.get(item.anilistId) : undefined);
-    if (target) {
-      // Duplicate Simkl rows for the same anime: the first one wins.
-      if (target.simkl) continue;
-      target.simkl = item.state;
-      target.simklId = item.simklId;
-      target.year = item.year;
-      target.cover = target.cover ?? item.cover;
-      target.totalEpisodes = target.totalEpisodes ?? normalizeTotal(item.totalEpisodes);
-      target.format = target.format ?? item.animeType;
-      continue;
-    }
-
-    // Anime unknown to MAL and AniList are ignored: Simkl is a mirror, never a source of entries.
+  for (const item of input.local) {
+    const isMovie = item.kind === "movie";
+    bases.push({
+      key: tmdbKey(item.kind, item.tmdbId),
+      kind: item.kind,
+      malId: null,
+      anilistId: null,
+      tmdbId: item.tmdbId,
+      title: item.title || "Sans titre",
+      englishTitle: item.originalTitle,
+      cover: item.cover,
+      color: null,
+      totalEpisodes: isMovie ? 1 : normalizeTotal(item.totalEpisodes),
+      format: null,
+      year: item.year,
+      nextAiring: isMovie ? null : item.nextAiring,
+      nextEpisode: isMovie ? null : item.nextEpisode,
+      lastEpisode: isMovie ? null : item.lastEpisode,
+      mal: null,
+      anilist: null,
+      local: item.state,
+      availability: "local",
+    });
   }
 
   return bases.map((base) => ({ ...base, ...computeSync(base, connected) })).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -305,16 +267,12 @@ export function unresolvedMalIds(input: MergeInput): number[] {
     .filter((id) => !known.has(id) && !input.idMap.has(id));
 }
 
-/**
- * The state that counts for an entry. For anime, MAL and AniList are the only sources of truth:
- * Simkl is a one-way mirror and never takes part, whatever its progress or update date.
- * Shows and movies only exist on Simkl.
- */
+/** The anime state that counts: MAL and AniList are the only sources of truth. */
 export function animeTruthState(entry: Pick<MergedEntry, "mal" | "anilist">): EntryState | null {
   return animeMaxState(entry.mal, entry.anilist);
 }
 
-/** State shown in the UI for an entry. */
-export function displayState(entry: Pick<MergedEntry, "kind" | "mal" | "anilist" | "simkl">): EntryState | null {
-  return entry.kind === "anime" ? animeTruthState(entry) : entry.simkl;
+/** State shown in the UI for an entry: the anime truth, or the local tracking for shows and movies. */
+export function displayState(entry: Pick<MergedEntry, "kind" | "mal" | "anilist" | "local">): EntryState | null {
+  return entry.kind === "anime" ? animeTruthState(entry) : entry.local;
 }

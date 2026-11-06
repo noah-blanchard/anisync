@@ -19,21 +19,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { useEntryActions } from "@/hooks/use-entry-actions";
 import { accentStyle } from "@/lib/color";
-import { useList } from "@/hooks/use-list";
 import {
   episodeCode,
   formatLabel,
   KIND_LABELS,
   nextAiringLabel,
   scoreLabel,
-  SERVICE_LABELS,
-  simklUrl,
+  relativeFuture,
+  SLOT_LABELS,
   STATUS_LABELS,
+  tmdbUrl,
 } from "@/lib/labels";
-import { normalizeTotal, statusesForKind, type EntryState, type ServiceName } from "@/lib/mapping";
+import { normalizeTotal, statusesForKind, type EntryState, type ServiceName, type Slot } from "@/lib/mapping";
 import { displayState, type MergedEntry } from "@/lib/merge";
 
-const SERVICE_NAMES: Record<ServiceName, string> = { mal: "MyAnimeList", anilist: "AniList", simkl: "Simkl" };
+const SERVICE_NAMES: Record<Slot, string> = { mal: "MyAnimeList", anilist: "AniList", local: "AniSync" };
 
 function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join("");
@@ -42,19 +42,24 @@ function joinNames(names: string[]): string {
 
 export function serviceUrl(
   service: ServiceName,
-  entry: Pick<MergedEntry, "malId" | "anilistId" | "simklId" | "kind">,
+  entry: Pick<MergedEntry, "malId" | "anilistId">,
 ): string | null {
-  if (service === "simkl") return entry.simklId ? simklUrl(entry.kind, entry.simklId) : null;
   if (service === "mal") return entry.malId ? `https://myanimelist.net/anime/${entry.malId}` : null;
   return entry.anilistId ? `https://anilist.co/anime/${entry.anilistId}` : null;
 }
 
-function ServiceRow({ service, entry, state }: { service: ServiceName; entry: MergedEntry; state: EntryState | null }) {
-  const url = serviceUrl(service, entry);
+/** One row per place holding the entry: MAL, AniList, or the local AniSync tracking (with a TMDB link). */
+function ServiceRow({ service, entry, state }: { service: Slot; entry: MergedEntry; state: EntryState | null }) {
+  const url =
+    service === "local"
+      ? entry.tmdbId !== null && entry.kind !== "anime"
+        ? tmdbUrl(entry.kind, entry.tmdbId)
+        : null
+      : serviceUrl(service, entry);
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/60 px-3 py-2.5 text-sm">
       <div className="min-w-0">
-        <div className="font-medium">{SERVICE_LABELS[service]}</div>
+        <div className="font-medium">{service === "local" ? "Suivi AniSync" : SLOT_LABELS[service]}</div>
         <div className="truncate text-muted-foreground tabular-nums">
           {state
             ? [
@@ -69,7 +74,12 @@ function ServiceRow({ service, entry, state }: { service: ServiceName; entry: Me
       </div>
       {url && (
         <Button variant="ghost" size="icon" asChild>
-          <a href={url} target="_blank" rel="noreferrer" aria-label={`Ouvrir sur ${SERVICE_LABELS[service]}`}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Ouvrir sur ${service === "local" ? "TMDB" : SLOT_LABELS[service]}`}
+          >
             <ExternalLinkIcon />
           </a>
         </Button>
@@ -82,13 +92,16 @@ export function EntryDetail({ entry }: { entry: MergedEntry }) {
   const { open, close } = useOverlay();
   const actions = useEntryActions(entry.key);
   const state = displayState(entry);
+  const isShow = entry.kind === "show";
   const total = normalizeTotal(entry.totalEpisodes);
   const progress = state?.progress ?? 0;
-  const airing = nextAiringLabel(entry.nextAiring);
-  const { data } = useList();
+  // Shows: "Prochain épisode dans 3 j"; anime: "Ép. 5 dans 3 j".
+  const airing = entry.nextAiring
+    ? isShow
+      ? `Prochain épisode ${relativeFuture(entry.nextAiring.airingAt)}`
+      : nextAiringLabel(entry.nextAiring)
+    : null;
   const isMovie = entry.kind === "movie";
-  const isShow = entry.kind === "show";
-  const simklConnected = Boolean(data?.connections.simkl);
   const meta = (
     isMovie
       ? [KIND_LABELS.movie, entry.year]
@@ -103,7 +116,7 @@ export function EntryDetail({ entry }: { entry: MergedEntry }) {
     ? state !== null && entry.nextEpisode !== null && state.status !== "completed"
     : state !== null && !(total !== null && progress >= total);
   // Services that actually hold this entry: they are the ones a deletion concerns.
-  const concerned = (["mal", "anilist", "simkl"] as const).filter((s) => entry[s] !== null);
+  const concerned = (["mal", "anilist", "local"] as const).filter((s) => entry[s] !== null);
 
   return (
     <div className="entry-accent flex flex-col gap-6 p-5 lg:p-6" style={accentStyle(entry.color)}>
@@ -182,9 +195,9 @@ export function EntryDetail({ entry }: { entry: MergedEntry }) {
               </>
             ) : state?.status === "completed" ? (
               "Série terminée"
-            ) : (
+            ) : state?.status === "watching" ? (
               "À jour : aucun épisode à voir pour l'instant"
-            )}
+            ) : null}
           </p>
         )}
         {airing && (
@@ -215,9 +228,7 @@ export function EntryDetail({ entry }: { entry: MergedEntry }) {
         {entry.kind === "anime" && entry.availability !== "mal_only" && entry.anilistId !== null && (
           <ServiceRow service="anilist" entry={entry} state={entry.anilist} />
         )}
-        {(entry.kind !== "anime" || simklConnected || entry.simkl !== null) && (
-          <ServiceRow service="simkl" entry={entry} state={entry.simkl} />
-        )}
+        {entry.kind !== "anime" && <ServiceRow service="local" entry={entry} state={entry.local} />}
         {entry.kind === "anime" && !entry.inSync && (
           <Button variant="outline" onClick={() => open({ type: "compare", key: entry.key })}>
             Comparer et aligner

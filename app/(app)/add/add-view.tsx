@@ -19,7 +19,7 @@ import { statusesForKind, type CanonicalStatus, type MediaKind } from "@/lib/map
 import { cn } from "@/lib/utils";
 
 type AnimeResult = Extract<AnnotatedSearchResult, { kind: "anime" }>;
-type SimklResult = Exclude<AnnotatedSearchResult, { kind: "anime" }>;
+type MediaResult = Exclude<AnnotatedSearchResult, { kind: "anime" }>;
 
 const KIND_OPTIONS: { id: MediaKind; label: string; placeholder: string; noun: string }[] = [
   { id: "anime", label: "Anime", placeholder: "Titre d'un anime…", noun: "un anime" },
@@ -99,19 +99,14 @@ function AnimeResultCard({ result }: { result: AnimeResult }) {
   );
 }
 
-function SimklResultCard({ result }: { result: SimklResult }) {
+function MediaResultCard({ result }: { result: MediaResult }) {
   const [status, setStatus] = React.useState<CanonicalStatus>("plan_to_watch");
   const [added, setAdded] = React.useState(false);
   const add = useAddEntry({ onAdded: () => setAdded(true) });
 
   const inList = result.inList || added;
-  const meta = [
-    KIND_LABELS[result.kind],
-    result.year,
-    result.kind === "show" && result.totalEpisodes ? episodesLabel(result.totalEpisodes) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const meta = [KIND_LABELS[result.kind], result.year].filter(Boolean).join(" · ");
+  const showOriginal = result.originalTitle !== null && result.originalTitle !== result.title;
 
   return (
     <li className="entry-accent flex gap-3 rounded-2xl border border-border bg-card p-2.5 md:flex-col md:p-0" style={accentStyle(null)}>
@@ -125,12 +120,14 @@ function SimklResultCard({ result }: { result: SimklResult }) {
         <div className="min-w-0">
           <h3 className="line-clamp-2 text-sm leading-snug font-semibold md:min-h-[2lh]">{result.title}</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">{meta}</p>
+          {showOriginal && <p className="line-clamp-1 text-xs text-muted-foreground italic">{result.originalTitle}</p>}
+          {result.overview && <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{result.overview}</p>}
         </div>
         {inList && (
           <div className="flex flex-wrap gap-1.5">
             <Badge variant="success">
               <CheckIcon aria-hidden />
-              Déjà dans ta liste
+              Dans ta liste
             </Badge>
           </div>
         )}
@@ -153,7 +150,7 @@ function SimklResultCard({ result }: { result: SimklResult }) {
             <Button
               className="h-10"
               onClick={() =>
-                add.mutate({ target: { kind: result.kind, simklId: result.simklId, title: result.title }, status })
+                add.mutate({ target: { kind: result.kind, tmdbId: result.tmdbId, title: result.title }, status })
               }
               disabled={add.isPending}
               aria-label={`Ajouter ${result.title}`}
@@ -170,10 +167,10 @@ function SimklResultCard({ result }: { result: SimklResult }) {
 
 export function AddView() {
   const { data: list } = useList();
-  const simklConnected = Boolean(list?.connections.simkl);
+  const tmdbEnabled = Boolean(list?.tmdbEnabled);
   const [chosen, setChosen] = React.useState<MediaKind>("anime");
-  // Without Simkl only the anime search exists.
-  const kind: MediaKind = simklConnected ? chosen : "anime";
+  // Without TMDB only the anime search exists.
+  const kind: MediaKind = tmdbEnabled ? chosen : "anime";
   const option = KIND_OPTIONS.find((o) => o.id === kind) ?? KIND_OPTIONS[0]!;
   const [query, setQuery] = React.useState("");
   const debounced = useDebounced(query.trim(), 300);
@@ -192,12 +189,12 @@ export function AddView() {
       <PageHeader
         title="Ajouter"
         subtitle={
-          simklConnected
-            ? "Anime : recherche AniList, ajout sur tes services. Séries et films : recherche Simkl."
+          tmdbEnabled
+            ? "Anime : recherche AniList, ajout sur MyAnimeList et AniList. Séries et films : recherche TMDB, suivi dans AniSync."
             : "Recherche sur AniList, ajout sur MAL et AniList."
         }
       />
-      {simklConnected && (
+      {tmdbEnabled && (
         <div role="radiogroup" aria-label="Type de média" className="mb-4 flex gap-1.5">
           {KIND_OPTIONS.map(({ id, label }) => {
             const active = kind === id;
@@ -265,7 +262,7 @@ export function AddView() {
             result.kind === "anime" ? (
               <AnimeResultCard key={result.key} result={result} />
             ) : (
-              <SimklResultCard key={result.key} result={result} />
+              <MediaResultCard key={result.key} result={result} />
             ),
           )}
         </ul>
