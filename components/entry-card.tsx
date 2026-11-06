@@ -1,14 +1,15 @@
 "use client";
 
-import { CalendarClockIcon, PlusIcon } from "lucide-react";
+import { CalendarClockIcon, CheckIcon, PlusIcon } from "lucide-react";
 import * as React from "react";
 import { Cover, ProgressBar, SyncBadges, TickNumber } from "@/components/entry-bits";
 import { useOverlay } from "@/components/overlay-context";
 import { useEntryActions } from "@/hooks/use-entry-actions";
 import { accentStyle } from "@/lib/color";
-import { nextAiringLabel, STATUS_LABELS } from "@/lib/labels";
+import { episodeCode, KIND_LABELS, nextAiringLabel, STATUS_LABELS } from "@/lib/labels";
 import { normalizeTotal } from "@/lib/mapping";
 import { displayState, type MergedEntry } from "@/lib/merge";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 function PlusOneButton({
@@ -22,6 +23,7 @@ function PlusOneButton({
   disabled: boolean;
   className?: string;
 }) {
+  const movie = entry.kind === "movie";
   const [popping, setPopping] = React.useState(0);
   return (
     <button
@@ -32,20 +34,38 @@ function PlusOneButton({
         onClick();
       }}
       disabled={disabled}
-      aria-label={`Ajouter un épisode à ${entry.title}`}
+      aria-label={movie ? `Marquer ${entry.title} comme vu` : `Ajouter un épisode à ${entry.title}`}
       className={cn(
         "relative z-10 inline-flex shrink-0 items-center justify-center gap-0.5 rounded-2xl bg-entry-accent font-semibold text-background tabular-nums transition-[transform,opacity] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:active:scale-90 disabled:opacity-40",
         className,
       )}
     >
       <span key={popping} className={cn("inline-flex items-center gap-0.5", popping > 0 && "motion-safe:animate-pop")}>
-        <PlusIcon className="size-4" strokeWidth={3} aria-hidden />1
+        {movie ? (
+          <>
+            <CheckIcon className="size-4" strokeWidth={3} aria-hidden />
+            Vu
+          </>
+        ) : (
+          <>
+            <PlusIcon className="size-4" strokeWidth={3} aria-hidden />1
+          </>
+        )}
       </span>
     </button>
   );
 }
 
-export function EntryCard({ entry, priority = false }: { entry: MergedEntry; priority?: boolean }) {
+export function EntryCard({
+  entry,
+  priority = false,
+  showKind = false,
+}: {
+  entry: MergedEntry;
+  priority?: boolean;
+  /** Show the Série / Film badge (kind filter on "Tout"). */
+  showKind?: boolean;
+}) {
   const { open } = useOverlay();
   const actions = useEntryActions(entry.key);
   const state = displayState(entry);
@@ -53,7 +73,16 @@ export function EntryCard({ entry, priority = false }: { entry: MergedEntry; pri
   const progress = state?.progress ?? 0;
   const atEnd = total !== null && progress >= total;
   const airing = nextAiringLabel(entry.nextAiring);
-  const canIncrement = state !== null && !atEnd && state.status !== "completed";
+  const isMovie = entry.kind === "movie";
+  const isShow = entry.kind === "show";
+  const canIncrement = isMovie
+    ? state !== null && state.status !== "completed"
+    : isShow
+      ? state !== null && entry.nextEpisode !== null && state.status !== "completed"
+      : state !== null && !atEnd && state.status !== "completed";
+  const upToDate = isShow && state !== null && state.status === "watching" && entry.nextEpisode === null;
+  const onAction = isMovie ? () => actions.setStatus("completed") : actions.increment;
+  const stepKeys = !isMovie;
 
   const openDetail = () => open({ type: "detail", key: entry.key });
 
@@ -62,6 +91,7 @@ export function EntryCard({ entry, priority = false }: { entry: MergedEntry; pri
       className="entry-accent group relative flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5 transition-colors hover:border-foreground/15 md:flex-col md:items-stretch md:gap-0 md:p-0"
       style={accentStyle(entry.color)}
       onKeyDown={(e) => {
+        if (!stepKeys) return;
         if ((e.key === "+" || e.key === "=") && canIncrement) {
           e.preventDefault();
           actions.increment();
@@ -91,19 +121,32 @@ export function EntryCard({ entry, priority = false }: { entry: MergedEntry; pri
         <h3 className="line-clamp-2 text-[15px] leading-snug font-semibold md:min-h-[2lh] md:text-sm">{entry.title}</h3>
 
         <div className="flex items-baseline gap-2 text-sm text-muted-foreground">
-          <span className="text-foreground">
-            Ép. <TickNumber value={progress} className="font-semibold" />
-            <span className="tabular-nums"> / {total ?? "?"}</span>
-          </span>
-          {state && state.status !== "watching" && (
-            <span className="truncate text-xs">{STATUS_LABELS[state.status]}</span>
+          {isMovie ? (
+            <span className="truncate text-foreground">{state ? STATUS_LABELS[state.status] : "Film"}</span>
+          ) : (
+            <>
+              <span className="text-foreground">
+                {isShow && entry.nextEpisode ? (
+                  <span className="font-semibold">{episodeCode(entry.nextEpisode)} · </span>
+                ) : (
+                  "Ép. "
+                )}
+                <TickNumber value={progress} className="font-semibold" />
+                <span className="tabular-nums"> / {total ?? "?"}</span>
+              </span>
+              {upToDate && <span className="truncate text-xs">À jour</span>}
+              {state && state.status !== "watching" && (
+                <span className="truncate text-xs">{STATUS_LABELS[state.status]}</span>
+              )}
+            </>
           )}
         </div>
 
-        <ProgressBar value={progress} total={total} />
+        {!isMovie && <ProgressBar value={progress} total={total} />}
 
         <div className="flex min-h-6 items-center gap-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            {showKind && entry.kind !== "anime" && <Badge variant="secondary">{KIND_LABELS[entry.kind]}</Badge>}
             {airing && (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <CalendarClockIcon className="size-3.5" aria-hidden />
@@ -114,7 +157,7 @@ export function EntryCard({ entry, priority = false }: { entry: MergedEntry; pri
           </div>
           <PlusOneButton
             entry={entry}
-            onClick={actions.increment}
+            onClick={onAction}
             disabled={!canIncrement}
             className="pointer-events-auto hidden h-10 px-3.5 text-sm md:inline-flex"
           />
@@ -123,7 +166,7 @@ export function EntryCard({ entry, priority = false }: { entry: MergedEntry; pri
 
       <PlusOneButton
         entry={entry}
-        onClick={actions.increment}
+        onClick={onAction}
         disabled={!canIncrement}
         className="size-14 text-base md:hidden"
       />

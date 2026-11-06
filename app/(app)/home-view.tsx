@@ -9,6 +9,7 @@ import { ENTRY_GRID, EntryCard } from "@/components/entry-card";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/list-states";
 import { useOverlay } from "@/components/overlay-context";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { countKinds, KindFilter, matchesKind, useKindFilter } from "@/components/kind-filter";
 import { InstallCard } from "@/components/pwa";
 import { Button } from "@/components/ui/button";
 import { useRefreshList, useList } from "@/hooks/use-list";
@@ -34,24 +35,31 @@ export function HomeView() {
     }
   }, [refreshList]);
 
-  const watching = React.useMemo(
+  const kindAvailable = Boolean(data?.connections.simkl);
+  const [kind, setKind] = useKindFilter(kindAvailable);
+
+  const active = React.useMemo(
     () =>
-      (data?.entries ?? [])
-        .filter((e) => {
-          const state = displayState(e);
-          return state !== null && isActiveStatus(state.status);
-        })
-        .sort((a, b) => b.updatedAt - a.updatedAt),
+      (data?.entries ?? []).filter((e) => {
+        const state = displayState(e);
+        return state !== null && isActiveStatus(state.status);
+      }),
     [data],
   );
-  const ordered = useStableOrder(watching, data?.fetchedAt);
+  const kindCounts = React.useMemo(() => countKinds(active), [active]);
+  const watching = React.useMemo(
+    () => active.filter((e) => matchesKind(e, kind)).sort((a, b) => b.updatedAt - a.updatedAt),
+    [active, kind],
+  );
+  const ordered = useStableOrder(watching, `${data?.fetchedAt}|${kind}`);
   const outOfSync = data?.entries.filter((e) => !e.inSync).length ?? 0;
+  const noun = kind === "show" ? "série" : kind === "movie" ? "film" : "anime";
 
   return (
     <PullToRefresh onRefresh={refresh}>
       <PageHeader
         title="En cours"
-        subtitle={data ? `${watching.length} anime${watching.length > 1 ? "s" : ""} en cours` : " "}
+        subtitle={data ? `${watching.length} ${noun}${watching.length > 1 ? "s" : ""} en cours` : " "}
         actions={
           <>
             <Button variant="outline" onClick={() => open({ type: "check" })} disabled={!data}>
@@ -78,6 +86,8 @@ export function HomeView() {
       <InstallCard />
       <BoosterShelf />
 
+      {kindAvailable && <KindFilter value={kind} onChange={setKind} counts={kindCounts} className="mb-4" />}
+
       {isPending ? (
         <ListSkeleton />
       ) : error ? (
@@ -85,13 +95,13 @@ export function HomeView() {
       ) : ordered.length === 0 ? (
         <EmptyState
           title="Rien en cours pour l'instant"
-          description="Ajoute un anime ou passe un titre « À voir » en cours depuis ta bibliothèque."
-          cta={{ href: "/add", label: "Ajouter un anime" }}
+          description="Ajoute un titre ou passe un titre « À voir » en cours depuis ta bibliothèque."
+          cta={{ href: "/add", label: "Ajouter un titre" }}
         />
       ) : (
         <div className={ENTRY_GRID}>
           {ordered.map((entry, i) => (
-            <EntryCard key={entry.key} entry={entry} priority={i < 4} />
+            <EntryCard key={entry.key} entry={entry} priority={i < 4} showKind={kindAvailable && kind === "all"} />
           ))}
         </div>
       )}

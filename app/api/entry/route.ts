@@ -12,8 +12,10 @@ export async function POST(req: Request) {
   if (!body.ok) return body.response;
   try {
     const result = await writeEntry({
+      key: body.data.key,
       malId: body.data.malId ?? null,
       anilistId: body.data.anilistId ?? null,
+      simkl: body.data.simkl,
       patch: body.data.patch,
       targets: body.data.targets,
     });
@@ -29,8 +31,10 @@ export async function DELETE(req: Request) {
   if (!body.ok) return body.response;
   try {
     const result = await removeEntry({
+      key: body.data.key,
       malId: body.data.malId ?? null,
       anilistId: body.data.anilistId ?? null,
+      simkl: body.data.simkl,
       targets: body.data.targets,
     });
     return NextResponse.json(result);

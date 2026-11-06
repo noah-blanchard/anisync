@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { setEntry, useList } from "@/hooks/use-list";
 import { api, type WriteResult } from "@/lib/client-api";
 import { accentStyle } from "@/lib/color";
+import { SERVICE_LABELS } from "@/lib/labels";
 import type { MergedEntry } from "@/lib/merge";
 
 const DELAY_MS = 1100;
 
 function describe(entry: MergedEntry): string {
-  if (entry.missingOn) return `Absent sur ${entry.missingOn === "mal" ? "MAL" : "AniList"}`;
+  if (entry.missingOn) return `Absent sur ${SERVICE_LABELS[entry.missingOn]}`;
   const labels = { status: "statut", progress: "progression", score: "note" } as const;
   return `Diffère : ${entry.diff.map((d) => labels[d]).join(", ")}`;
 }
@@ -25,7 +26,7 @@ export function SyncCheckView() {
   const qc = useQueryClient();
   const { open } = useOverlay();
   const { data } = useList();
-  const outOfSync = React.useMemo(() => data?.entries.filter((e) => !e.inSync && e.malId !== null) ?? [], [data]);
+  const outOfSync = React.useMemo(() => data?.entries.filter((e) => e.kind === "anime" && !e.inSync) ?? [], [data]);
   const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null);
   const cancelled = React.useRef(false);
 
@@ -46,7 +47,7 @@ export function SyncCheckView() {
       try {
         const result = await api<WriteResult>("/api/entry/align", {
           method: "POST",
-          body: JSON.stringify({ malId: entry.malId, source: "max" }),
+          body: JSON.stringify({ key: entry.key, source: "max" }),
         });
         setEntry(qc, entry.key, (current) => ({
           ...current,
@@ -55,8 +56,12 @@ export function SyncCheckView() {
             result.anilist.ok && !result.anilist.skipped && result.anilist.entry !== undefined
               ? result.anilist.entry
               : current.anilist,
+          simkl:
+            result.simkl.ok && !result.simkl.skipped && result.simkl.entry !== undefined
+              ? result.simkl.entry
+              : current.simkl,
         }));
-        if (!result.mal.ok || !result.anilist.ok) failures++;
+        if (!result.mal.ok || !result.anilist.ok || !result.simkl.ok) failures++;
       } catch {
         failures++;
       }
@@ -73,7 +78,7 @@ export function SyncCheckView() {
       <div className="flex flex-col items-center gap-2 px-5 py-10 text-center md:px-0">
         <CheckCircle2Icon className="size-10 text-success" aria-hidden />
         <p className="font-medium">Tout est synchronisé</p>
-        <p className="text-sm text-muted-foreground">MAL et AniList affichent la même chose partout.</p>
+        <p className="text-sm text-muted-foreground">Tes services affichent la même chose partout.</p>
       </div>
     );
   }

@@ -23,7 +23,7 @@ export function EntryOverlays() {
         open={overlay?.type === "detail" && !!entry}
         onOpenChange={onOpenChange}
         title={entry?.title ?? "Détail"}
-        description="Progression, statut et note sur MAL et AniList"
+        description="Progression, statut et note sur tes services"
       >
         {overlay?.type === "detail" && entry ? <EntryDetail entry={entry} /> : null}
       </ResponsiveOverlay>
@@ -32,7 +32,7 @@ export function EntryOverlays() {
         variant="dialog"
         open={overlay?.type === "compare" && !!entry}
         onOpenChange={onOpenChange}
-        title="Comparer MAL et AniList"
+        title="Comparer les services"
         description={entry?.title}
       >
         {overlay?.type === "compare" && entry ? <CompareView entry={entry} /> : null}
@@ -53,7 +53,7 @@ export function EntryOverlays() {
         open={overlay?.type === "check"}
         onOpenChange={onOpenChange}
         title="Vérification de la synchronisation"
-        description="Entrées qui diffèrent entre MAL et AniList"
+        description="Entrées qui diffèrent entre tes services"
       >
         {overlay?.type === "check" ? <SyncCheckView /> : null}
       </ResponsiveOverlay>

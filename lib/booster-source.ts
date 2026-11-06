@@ -142,7 +142,7 @@ async function exclusions(): Promise<{ anilist: Set<number>; mal: Set<number>; s
   try {
     const list = await getMergedList();
     for (const entry of list.entries) {
-      if (!entry.mal && !entry.anilist) continue;
+      if (entry.kind !== "anime" || (!entry.mal && !entry.anilist)) continue;
       if (entry.anilistId !== null) anilist.add(entry.anilistId);
       if (entry.malId !== null) mal.add(entry.malId);
       const state = displayState(entry);

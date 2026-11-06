@@ -58,7 +58,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
   const dismiss = (id: string) => setDismissed((d) => [...d, id]);
   const banners: React.ReactNode[] = [];
 
-  // The settings page already shows the connection cards.
+  // The settings page already shows the connection cards. Simkl is optional: never nag to connect it.
   const missing = onSettings ? [] : (["mal", "anilist"] as const).filter((s) => !current[s]);
   if (missing.length === 2 && !dismissed.includes("connect-all")) {
     banners.push(
@@ -119,7 +119,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
     }
   }
 
-  for (const service of ["mal", "anilist"] as const) {
+  for (const service of ["mal", "anilist", "simkl"] as const) {
     const error = data?.errors[service];
     if (error && !dismissed.includes(`error-${service}`)) {
       banners.push(

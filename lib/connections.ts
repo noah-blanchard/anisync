@@ -46,7 +46,7 @@ export function getConnectionInfos(): Record<ServiceName, ConnectionInfo | null>
     const row = rows.find((r) => r.service === s);
     return row ? toInfo(row) : null;
   };
-  return { mal: find("mal"), anilist: find("anilist") };
+  return { mal: find("mal"), anilist: find("anilist"), simkl: find("simkl") };
 }
 
 export function saveConnection(input: NewConnection): void {
