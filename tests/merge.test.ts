@@ -51,7 +51,7 @@ const noMap = new Map<number, number | null>();
 
 describe("mergeLists", () => {
   it("joins entries on idMal and flags them in sync", () => {
-    const merged = mergeLists({ mal: [mal(1, { progress: 3 })], anilist: [al(101, 1, { progress: 3 })], idMap: noMap });
+    const merged = mergeLists({ mal: [mal(1, { progress: 3 })], anilist: [al(101, 1, { progress: 3 })], simkl: null, idMap: noMap });
     expect(merged).toHaveLength(1);
     const [entry] = merged;
     expect(entry).toMatchObject({
@@ -73,7 +73,7 @@ describe("mergeLists", () => {
     const [entry] = mergeLists({
       mal: [mal(1, { progress: 3, score: 7, status: "watching" })],
       anilist: [al(101, 1, { progress: 4, score: 8, status: "rewatching" })],
-      idMap: noMap,
+      simkl: null, idMap: noMap,
     });
     expect(entry?.inSync).toBe(false);
     expect(entry?.diff).toEqual(["status", "progress", "score"]);
@@ -83,14 +83,14 @@ describe("mergeLists", () => {
     const [entry, ...rest] = mergeLists({
       mal: [mal(1, { progress: 2 })],
       anilist: [al(101, null, { progress: 2 })],
-      idMap: new Map([[1, 101]]),
+      simkl: null, idMap: new Map([[1, 101]]),
     });
     expect(rest).toHaveLength(0);
     expect(entry).toMatchObject({ malId: 1, anilistId: 101, availability: "both", inSync: true });
   });
 
   it("marks AniList entries without idMal as anilist_only, never out of sync", () => {
-    const [entry] = mergeLists({ mal: [], anilist: [al(500, null, { progress: 5 })], idMap: noMap });
+    const [entry] = mergeLists({ mal: [], anilist: [al(500, null, { progress: 5 })], simkl: null, idMap: noMap });
     expect(entry).toMatchObject({
       key: "al:500",
       malId: null,
@@ -102,7 +102,7 @@ describe("mergeLists", () => {
   });
 
   it("marks MAL entries confirmed missing on AniList as mal_only", () => {
-    const [entry] = mergeLists({ mal: [mal(7)], anilist: [], idMap: new Map([[7, null]]) });
+    const [entry] = mergeLists({ mal: [mal(7)], anilist: [], simkl: null, idMap: new Map([[7, null]]) });
     expect(entry).toMatchObject({ malId: 7, anilistId: null, availability: "mal_only", inSync: true });
   });
 
@@ -110,7 +110,7 @@ describe("mergeLists", () => {
     const merged = mergeLists({
       mal: [mal(1)],
       anilist: [al(202, 2)],
-      idMap: new Map([[1, 101]]),
+      simkl: null, idMap: new Map([[1, 101]]),
     });
     const onlyMal = merged.find((e) => e.malId === 1);
     const onlyAl = merged.find((e) => e.malId === 2);
@@ -119,11 +119,11 @@ describe("mergeLists", () => {
   });
 
   it("does not flag anything when a service is not connected", () => {
-    const merged = mergeLists({ mal: [mal(1), mal(2)], anilist: null, idMap: noMap });
+    const merged = mergeLists({ mal: [mal(1), mal(2)], anilist: null, simkl: null, idMap: noMap });
     expect(merged).toHaveLength(2);
     expect(merged.every((e) => e.inSync && e.missingOn === null)).toBe(true);
 
-    const alOnly = mergeLists({ mal: null, anilist: [al(101, 1)], idMap: noMap });
+    const alOnly = mergeLists({ mal: null, anilist: [al(101, 1)], simkl: null, idMap: noMap });
     expect(alOnly[0]).toMatchObject({ malId: 1, inSync: true, missingOn: null });
   });
 
@@ -131,13 +131,13 @@ describe("mergeLists", () => {
     const [entry] = mergeLists({
       mal: [mal(1, {}, { totalEpisodes: 24 })],
       anilist: [al(101, 1, {}, { totalEpisodes: null })],
-      idMap: noMap,
+      simkl: null, idMap: noMap,
     });
     expect(entry?.totalEpisodes).toBe(24);
   });
 
   it("treats MAL total 0 as unknown", () => {
-    const [entry] = mergeLists({ mal: [mal(1, {}, { totalEpisodes: 0 })], anilist: null, idMap: noMap });
+    const [entry] = mergeLists({ mal: [mal(1, {}, { totalEpisodes: 0 })], anilist: null, simkl: null, idMap: noMap });
     expect(entry?.totalEpisodes).toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe("mergeLists", () => {
     const merged = mergeLists({
       mal: [mal(1, { updatedAt: 10 }), mal(2, { updatedAt: 30 })],
       anilist: [al(103, 3, { updatedAt: 20 })],
-      idMap: noMap,
+      simkl: null, idMap: noMap,
     });
     expect(merged.map((e) => e.malId)).toEqual([2, 3, 1]);
   });
@@ -156,7 +156,7 @@ describe("unresolvedMalIds", () => {
     const ids = unresolvedMalIds({
       mal: [mal(1), mal(2), mal(3), mal(4)],
       anilist: [al(101, 1)],
-      idMap: new Map([
+      simkl: null, idMap: new Map([
         [2, 102],
         [3, null],
       ]),
@@ -168,13 +168,13 @@ describe("unresolvedMalIds", () => {
 describe("computeSync / displayState", () => {
   it("recomputes sync after an optimistic change", () => {
     const sync = computeSync(
-      { mal: state({ progress: 4 }), anilist: state({ progress: 4 }), availability: "both" },
-      { mal: true, anilist: true },
+      { kind: "anime", mal: state({ progress: 4 }), anilist: state({ progress: 4 }), simkl: null, availability: "both" },
+      { mal: true, anilist: true, simkl: false },
     );
     expect(sync).toMatchObject({ inSync: true, diff: [] });
   });
 
   it("shows the most advanced side", () => {
-    expect(displayState({ mal: state({ progress: 2 }), anilist: state({ progress: 5 }) })?.progress).toBe(5);
+    expect(displayState({ mal: state({ progress: 2 }), anilist: state({ progress: 5 }), simkl: null })?.progress).toBe(5);
   });
 });

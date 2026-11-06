@@ -1,5 +1,5 @@
-import type { CanonicalStatus, ServiceName } from "./mapping";
-import type { NextAiring } from "./merge";
+import type { CanonicalStatus, MediaKind, ServiceName } from "./mapping";
+import type { EpisodeRef, NextAiring } from "./merge";
 
 export const STATUS_LABELS: Record<CanonicalStatus, string> = {
   watching: "En cours",
@@ -19,7 +19,22 @@ export const STATUS_ORDER: CanonicalStatus[] = [
   "dropped",
 ];
 
-export const SERVICE_LABELS: Record<ServiceName, string> = { mal: "MAL", anilist: "AniList" };
+export const SERVICE_LABELS: Record<ServiceName, string> = { mal: "MAL", anilist: "AniList", simkl: "Simkl" };
+
+export const KIND_LABELS: Record<MediaKind, string> = { anime: "Anime", show: "Série", movie: "Film" };
+
+/** "S02E05" */
+export function episodeCode(ref: Pick<EpisodeRef, "season" | "episode">): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `S${pad(ref.season)}E${pad(ref.episode)}`;
+}
+
+const SIMKL_PATHS: Record<MediaKind, string> = { anime: "anime", show: "tv", movie: "movies" };
+
+/** Public Simkl page of a title (attribution link). */
+export function simklUrl(kind: MediaKind, id: number): string {
+  return `https://simkl.com/${SIMKL_PATHS[kind]}/${id}`;
+}
 
 const FORMAT_LABELS: Record<string, string> = {
   TV: "TV",
