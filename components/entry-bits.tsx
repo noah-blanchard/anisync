@@ -129,7 +129,6 @@ export function SyncBadges({
   if (entry.availability === "anilist_only") {
     badges.push(<Badge key="only" variant="secondary">AniList uniquement</Badge>);
   }
-  if (entry.availability === "simkl_only") badges.push(<Badge key="only" variant="secondary">Simkl uniquement</Badge>);
   if (badges.length === 0) return null;
   return <div className={cn("flex flex-wrap items-center gap-1.5", className)}>{badges}</div>;
 }

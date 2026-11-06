@@ -242,9 +242,13 @@ export function pickMostAdvanced(states: readonly (EntryState | null)[]): EntryS
   return best;
 }
 
-/** The state shown in the UI when both sides exist: the most advanced one. */
-export function pickDisplayState(mal: EntryState | null, anilist: EntryState | null): EntryState | null {
-  return pickMostAdvanced([mal, anilist]);
+/**
+ * The anime state that counts: the most advanced of MAL / AniList.
+ * Deliberately takes no Simkl argument: Simkl is a write-only mirror for anime.
+ */
+export function animeMaxState(mal: EntryState | null, anilist: EntryState | null): EntryState | null {
+  if (mal && anilist) return maxState(mal, anilist);
+  return mal ?? anilist;
 }
 
 /**

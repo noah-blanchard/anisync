@@ -6,8 +6,7 @@ import {
   diffStates,
   diffWithSimkl,
   normalizeTotal,
-  pickDisplayState,
-  pickMostAdvanced,
+  animeMaxState,
   type EntryState,
   type MediaKind,
   type ServiceName,
@@ -133,9 +132,12 @@ export function computeSync(
   entry: Pick<MergedEntry, "kind" | "mal" | "anilist" | "simkl" | "availability">,
   connected: { mal: boolean; anilist: boolean; simkl: boolean },
 ): SyncFields {
-  const updatedAt = Math.max(entry.mal?.updatedAt ?? 0, entry.anilist?.updatedAt ?? 0, entry.simkl?.updatedAt ?? 0);
   // Shows and movies live on Simkl only: nothing to compare.
-  if (entry.kind !== "anime") return { inSync: true, diff: [], missingOn: null, updatedAt };
+  if (entry.kind !== "anime") {
+    return { inSync: true, diff: [], missingOn: null, updatedAt: entry.simkl?.updatedAt ?? 0 };
+  }
+  // For anime only MAL / AniList count: a fresh Simkl import must not reorder or "refresh" entries.
+  const updatedAt = Math.max(entry.mal?.updatedAt ?? 0, entry.anilist?.updatedAt ?? 0);
 
   let diff: SyncField[] = [];
   let missingOn: ServiceName | null = null;
@@ -147,8 +149,9 @@ export function computeSync(
     else if (entry.anilist) missingOn = "mal";
   }
 
-  if (connected.simkl && entry.availability !== "simkl_only") {
-    const reference = pickDisplayState(entry.mal, entry.anilist);
+  // Simkl is a mirror: a difference only means that Simkl needs an update (the reference is MAL / AniList).
+  if (connected.simkl) {
+    const reference = animeTruthState(entry);
     if (reference && entry.simkl) {
       for (const field of diffWithSimkl(reference, entry.simkl)) {
         if (!diff.includes(field)) diff.push(field);
@@ -237,11 +240,10 @@ export function mergeLists(input: MergeInput): MergedEntry[] {
   // Simkl: anime attach to the entry with the same MAL id, then the same AniList id.
   const byMal = new Map<number, EntryBase>();
   const byAnilist = new Map<number, EntryBase>();
-  const register = (entry: EntryBase) => {
+  for (const entry of bases) {
     if (entry.malId !== null && !byMal.has(entry.malId)) byMal.set(entry.malId, entry);
     if (entry.anilistId !== null && !byAnilist.has(entry.anilistId)) byAnilist.set(entry.anilistId, entry);
-  };
-  bases.forEach(register);
+  }
 
   for (const item of input.simkl ?? []) {
     if (item.kind !== "anime") {
@@ -285,30 +287,7 @@ export function mergeLists(input: MergeInput): MergedEntry[] {
       continue;
     }
 
-    const hasAnimeId = item.malId !== null || item.anilistId !== null;
-    const entry: EntryBase = {
-      key: hasAnimeId ? entryKey(item.malId, item.anilistId) : simklKey("anime", item.simklId),
-      kind: "anime",
-      malId: item.malId,
-      anilistId: item.anilistId,
-      simklId: item.simklId,
-      title: item.title || "Sans titre",
-      englishTitle: null,
-      cover: item.cover,
-      color: null,
-      totalEpisodes: normalizeTotal(item.totalEpisodes),
-      format: item.animeType,
-      year: item.year,
-      nextAiring: null,
-      nextEpisode: null,
-      lastEpisode: null,
-      mal: null,
-      anilist: null,
-      simkl: item.state,
-      availability: hasAnimeId ? "both" : "simkl_only",
-    };
-    bases.push(entry);
-    register(entry);
+    // Anime unknown to MAL and AniList are ignored: Simkl is a mirror, never a source of entries.
   }
 
   return bases.map((base) => ({ ...base, ...computeSync(base, connected) })).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -326,7 +305,16 @@ export function unresolvedMalIds(input: MergeInput): number[] {
     .filter((id) => !known.has(id) && !input.idMap.has(id));
 }
 
+/**
+ * The state that counts for an entry. For anime, MAL and AniList are the only sources of truth:
+ * Simkl is a one-way mirror and never takes part, whatever its progress or update date.
+ * Shows and movies only exist on Simkl.
+ */
+export function animeTruthState(entry: Pick<MergedEntry, "mal" | "anilist">): EntryState | null {
+  return animeMaxState(entry.mal, entry.anilist);
+}
+
 /** State shown in the UI for an entry. */
-export function displayState(entry: Pick<MergedEntry, "mal" | "anilist" | "simkl">): EntryState | null {
-  return pickMostAdvanced([entry.mal, entry.anilist, entry.simkl]);
+export function displayState(entry: Pick<MergedEntry, "kind" | "mal" | "anilist" | "simkl">): EntryState | null {
+  return entry.kind === "anime" ? animeTruthState(entry) : entry.simkl;
 }

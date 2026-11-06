@@ -26,7 +26,6 @@ import {
   applyPatch,
   diffWithSimkl,
   isEmptyPatch,
-  maxState,
   patchBetween,
   type EntryPatch,
   type EntryState,
@@ -34,6 +33,7 @@ import {
   type ServiceName,
 } from "./mapping";
 import {
+  animeTruthState,
   computeSync,
   displayState,
   entryKey,
@@ -403,7 +403,8 @@ function normalized(patch: EntryPatch, total: number | null): EntryPatch {
   return out;
 }
 
-export type AlignSource = ServiceName | "max";
+/** "max" = most advanced of MAL / AniList. Simkl is never a source for anime. */
+export type AlignSource = Exclude<ServiceName, "simkl"> | "max";
 
 /** Drops a status change that only differs by watching / rewatching (Simkl has no rewatching). */
 function withoutEquivalentStatus(current: EntryState | null, target: EntryState, patch: EntryPatch): EntryPatch {
@@ -413,22 +414,19 @@ function withoutEquivalentStatus(current: EntryState | null, target: EntryState,
   return rest;
 }
 
-/** Copies one service's state (or the most advanced one) onto the others. Anime only. */
-export async function alignEntry(key: string, source: AlignSource): Promise<WriteResult> {
+/**
+ * Copies one source's state (MAL, AniList, or the most advanced of both) onto the others. Anime only.
+ * Simkl only ever receives the result (mirror): it is never read as a source.
+ */
+export async function alignEntry(key: string, source: AlignSource | "simkl"): Promise<WriteResult> {
+  if (source === "simkl") throw new ServiceError("simkl", 400, "Simkl ne peut pas servir de source pour un anime");
   const list = await getMergedList();
   const existing = findEntry(list, { key });
   const sourceService: ServiceName = source === "max" ? "mal" : source;
   if (!existing) throw new ServiceError(sourceService, 404, "Entrée introuvable");
   if (existing.kind !== "anime") throw new ServiceError("simkl", 400, "Seuls les anime peuvent être alignés");
 
-  let state: EntryState | null;
-  if (source === "max") {
-    const states = [existing.mal, existing.anilist, existing.simkl].filter((s): s is EntryState => s !== null);
-    const [first, ...others] = states;
-    state = first ? maxState(first, ...others) : null;
-  } else {
-    state = existing[source];
-  }
+  const state: EntryState | null = source === "max" ? animeTruthState(existing) : existing[source];
   if (!state) throw new ServiceError(sourceService, 400, "Aucune donnée à copier");
 
   const ids = await completeIds(existing.malId, existing.anilistId, existing);
@@ -437,8 +435,7 @@ export async function alignEntry(key: string, source: AlignSource): Promise<Writ
   for (const service of ALL_SERVICES) {
     if (source === service) continue;
     const patch = patchBetween(existing[service], state);
-    patches[service] =
-      service === "simkl" || source === "simkl" ? withoutEquivalentStatus(existing[service], state, patch) : patch;
+    patches[service] = service === "simkl" ? withoutEquivalentStatus(existing[service], state, patch) : patch;
   }
   return applyPatches(target, patches, existing);
 }

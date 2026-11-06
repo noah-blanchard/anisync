@@ -19,7 +19,10 @@ const FIELDS: { field: SyncField; label: string; format: (s: EntryState) => stri
 function Column({ service, state, diff }: { service: ServiceName; state: EntryState | null; diff: SyncField[] }) {
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3">
-      <div className="text-sm font-semibold">{SERVICE_LABELS[service]}</div>
+      <div className="text-sm font-semibold">
+        {SERVICE_LABELS[service]}
+        {service === "simkl" && " (miroir)"}
+      </div>
       {state ? (
         FIELDS.map(({ field, label, format }) => (
           <div key={field} className="flex flex-col">
@@ -36,20 +39,26 @@ function Column({ service, state, diff }: { service: ServiceName; state: EntrySt
   );
 }
 
-/** Anime states side by side (2 or 3 services) with one "keep" button per available state, plus "max". */
+/**
+ * Anime states side by side. MAL and AniList are the sources of truth (one "keep" button each, plus "max");
+ * Simkl is a mirror column that is updated from them and can never be kept.
+ */
 export function CompareView({ entry }: { entry: MergedEntry }) {
   const { close } = useOverlay();
   const { align, aligning } = useEntryActions(entry.key);
   const { data } = useList();
   // One column per service that holds the anime or is connected.
   const services = ALL_SERVICES.filter((s) => entry[s] !== null || Boolean(data?.connections[s]));
-  const run = (source: ServiceName | "max") => {
+  const run = (source: Exclude<ServiceName, "simkl"> | "max") => {
     align({ source });
     close();
   };
 
   return (
     <div className="flex flex-col gap-4 p-5 pt-2 md:p-0">
+      <p className="text-sm text-muted-foreground">
+        MAL et AniList font foi. Simkl n&apos;est qu&apos;un miroir : il est mis à jour d&apos;après eux, jamais l&apos;inverse.
+      </p>
       <div className={cn("grid gap-3", services.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
         {services.map((service) => (
           <Column key={service} service={service} state={entry[service]} diff={entry.diff} />
@@ -57,7 +66,7 @@ export function CompareView({ entry }: { entry: MergedEntry }) {
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {services
-          .filter((service) => entry[service] !== null)
+          .filter((service): service is Exclude<ServiceName, "simkl"> => service !== "simkl" && entry[service] !== null)
           .map((service) => (
             <Button key={service} variant="outline" disabled={aligning} onClick={() => run(service)}>
               Garder {SERVICE_LABELS[service]}

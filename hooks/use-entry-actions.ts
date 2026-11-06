@@ -52,6 +52,7 @@ function identity(entry: MergedEntry | undefined, key: string) {
 }
 
 function optimistic(entry: MergedEntry, vars: WriteVars, sources: ListPayload["sources"]): MergedEntry {
+  // For anime the base is MAL / AniList only (displayState ignores Simkl): the mirror never leads.
   const base = displayState(entry) ?? NEW_STATE;
   const next = { ...entry };
   for (const service of vars.targets ?? SERVICES) {
@@ -193,7 +194,7 @@ export function useEntryActions(key: string) {
     },
   });
 
-  const align = useMutation<WriteResult, Error, { source: "mal" | "anilist" | "simkl" | "max" }, Snapshot>({
+  const align = useMutation<WriteResult, Error, { source: "mal" | "anilist" | "max" }, Snapshot>({
     scope,
     mutationFn: ({ source }) => {
       const entry = getEntry(qc, key);

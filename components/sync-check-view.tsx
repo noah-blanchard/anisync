@@ -11,12 +11,16 @@ import { setEntry, useList } from "@/hooks/use-list";
 import { api, type WriteResult } from "@/lib/client-api";
 import { accentStyle } from "@/lib/color";
 import { SERVICE_LABELS } from "@/lib/labels";
+import { diffStates } from "@/lib/mapping";
 import type { MergedEntry } from "@/lib/merge";
 
 const DELAY_MS = 1100;
 
 function describe(entry: MergedEntry): string {
   if (entry.missingOn) return `Absent sur ${SERVICE_LABELS[entry.missingOn]}`;
+  // MAL and AniList agree: only the Simkl mirror is behind.
+  const mirrorOnly = !entry.mal || !entry.anilist || diffStates(entry.mal, entry.anilist).length === 0;
+  if (mirrorOnly) return "Simkl à mettre à jour";
   const labels = { status: "statut", progress: "progression", score: "note" } as const;
   return `Diffère : ${entry.diff.map((d) => labels[d]).join(", ")}`;
 }
@@ -78,7 +82,7 @@ export function SyncCheckView() {
       <div className="flex flex-col items-center gap-2 px-5 py-10 text-center md:px-0">
         <CheckCircle2Icon className="size-10 text-success" aria-hidden />
         <p className="font-medium">Tout est synchronisé</p>
-        <p className="text-sm text-muted-foreground">Tes services affichent la même chose partout.</p>
+        <p className="text-sm text-muted-foreground">Simkl recopie bien MAL et AniList.</p>
       </div>
     );
   }
@@ -104,7 +108,7 @@ export function SyncCheckView() {
           </Button>
         </div>
       ) : (
-        <Button onClick={alignAll}>Aligner sur le max ({outOfSync.length})</Button>
+        <Button onClick={alignAll}>Aligner sur le max MAL / AniList ({outOfSync.length})</Button>
       )}
 
       <ul className="flex max-h-[50dvh] flex-col gap-1.5 overflow-y-auto">
