@@ -1,7 +1,7 @@
 # AniSync
 
-Track your anime **once**: every +1 episode, status change or score is written to **MyAnimeList** and **AniList** at the same time,
-and to **Simkl** when it is connected. Simkl also brings **TV shows and movies** into the same app.
+Track your anime **once**: every +1 episode, status change or score is written to **MyAnimeList** and **AniList** at the same time.
+**TV shows and movies** are tracked in AniSync itself, with **TMDB** for search and metadata.
 Single-user, self-hosted (Dokploy, Docker). The interface is in French.
 
 - Next.js 15 (App Router, standalone) · Tailwind CSS v4 · shadcn/ui · TanStack Query
@@ -15,19 +15,19 @@ Single-user, self-hosted (Dokploy, Docker). The interface is in French.
 browser ──► middleware (HS256 JWT session) ──► Route Handlers /api/*
                                                 │
                                lib/sync.ts (60 s list cache, parallel writes)
-                                 │                       │
-                             lib/mal.ts            lib/anilist.ts         lib/simkl.ts (optional)
-                 (OAuth PKCE plain, refresh)   (OAuth code grant, GraphQL)  (OAuth V2 PKCE S256, refresh)
-                                 │                       │                       │
-                                 └────────────── SQLite /data ───────────────────┘
-                                   (encrypted connections, id_map)
+                    │                       │                        │
+                lib/mal.ts            lib/anilist.ts      lib/media.ts (local tracking)
+    (OAuth PKCE plain, refresh)   (OAuth code grant, GraphQL)   + lib/tmdb.ts (catalogue, optional)
+                    │                       │                        │
+                    └─────────────── SQLite /data ───────────────────┘
+          (encrypted connections, id_map, media_entries, tmdb_media cache)
 ```
 
 - The canonical key of an entry is the **MAL id**; MAL ↔ AniList id pairs are cached in `id_map`.
 - `lib/mapping.ts` and `lib/merge.ts` are pure functions covered by unit tests (`pnpm test`).
 - A write goes to every service in parallel (`Promise.allSettled`); the UI is optimistic and rolls back per service on failure.
-- For anime, MAL and AniList are the sources of truth; Simkl only mirrors them (never read as a source).
-- Shows and movies come from Simkl only (keys `simkl:show:<id>`, `simkl:movie:<id>`); see [Simkl](#simkl-shows-movies-and-anime).
+- For anime, MAL and AniList are the sources of truth.
+- Shows and movies are tracked locally in `media_entries` (keys `tmdb:show:<id>`, `tmdb:movie:<id>`); TMDB is only a catalogue, cached in `tmdb_media`; see [Shows and movies](#shows-and-movies).
 
 ---
 
@@ -51,14 +51,14 @@ Environment variables (all validated at startup; the app exits with a clear mess
 | `MAL_CLIENT_ID` | MyAnimeList app client ID. |
 | `MAL_CLIENT_SECRET` | Optional: present for a MAL app of type "web". |
 | `ANILIST_CLIENT_ID` / `ANILIST_CLIENT_SECRET` | AniList client credentials. |
-| `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET` | Optional. Simkl AUTH V2 client id; the secret only for a "Server apps & services" app (a "Browser sign-in" app has none). Without `SIMKL_CLIENT_ID`, everything Simkl stays hidden. |
+| `TMDB_API_KEY` | Optional. TMDB API key (v3) or API Read Access Token (v4). Without it, show / movie search is hidden; entries already tracked keep working. |
 | `DATABASE_PATH` | SQLite file (`./data/anisync.db` locally, `/data/anisync.db` in production). |
 
 > ⚠️ Changing `APP_SECRET` invalidates the session **and** makes stored tokens unreadable: you will have to reconnect MAL and AniList.
 
 Scripts: `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm db:generate` (generates a migration after changing `lib/schema.ts`).
 
-## 2. Create the OAuth clients
+## 2. API credentials
 
 ### MyAnimeList
 1. Go to <https://myanimelist.net/apiconfig> → **Create ID**.
@@ -74,15 +74,13 @@ MAL accepts **only one** redirect URL per client: create a separate client for l
 2. **Redirect URL**: `${APP_URL}/api/auth/anilist/callback`.
 3. Copy the **ID** (`ANILIST_CLIENT_ID`) and the **Secret** (`ANILIST_CLIENT_SECRET`).
 
-### Simkl (optional)
-1. Go to <https://simkl.com/settings/developer/> → create a new app on **AUTH V2**, of type
-   **Browser sign-in + app callback** (a V1 client id is rejected with `invalid_client`; V1 is being retired around April 2027).
-2. **Redirect URI**: `${APP_URL}/api/auth/simkl/callback`, exactly (same protocol and domain, no trailing slash).
-3. Copy the **Client ID** into `SIMKL_CLIENT_ID`, redeploy, then **Paramètres → Simkl → Connecter**.
-   This app type has no client secret (sign-in uses PKCE): leave `SIMKL_CLIENT_SECRET` empty. Fill it only with a
-   **Server apps & services** app, which comes with a secret.
+### TMDB (optional)
+1. Create an account on <https://www.themoviedb.org>, then go to **Settings → API** (<https://www.themoviedb.org/settings/api>).
+2. Copy the **API Key** (v3) or the **API Read Access Token** (v4) into `TMDB_API_KEY`, then redeploy.
 
-The exact URIs are shown (with a copy button) on the **Paramètres** (settings) page once the app is running.
+No OAuth and no redirect URI: TMDB is only used to search and describe shows and movies.
+
+The OAuth redirect URIs (MAL, AniList) are shown (with a copy button) on the **Paramètres** (settings) page once the app is running.
 
 ## 3. Deploying on Dokploy
 
@@ -128,7 +126,9 @@ Notes:
 
 ## 5. Backup
 
-All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata, daily list snapshots and the snapshots of the AniList profiles analysed). The lists themselves stay on MAL, AniList and Simkl.
+All state is in **`/data/anisync.db`** (encrypted tokens, id mapping cache, booster swipe history, stats metadata, daily list snapshots and the snapshots of the AniList profiles analysed).
+
+> ⚠️ **Shows and movies live only in this file.** Unlike anime, which are also on MAL and AniList, their tracking (status, episodes, scores, dates) exists nowhere else: back up `/data/anisync.db`.
 
 ```bash
 # safest: stop, copy, restart (a few seconds)
@@ -146,7 +146,7 @@ To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.
 
 ### Restore a list from a daily snapshot
 
-Settings > "Restaurer ma liste" compares a daily snapshot of your MAL / AniList list with the live one and lists every difference (changed, added since, removed since). You pick the snapshot day (its local time is shown), uncheck what you changed on purpose, and the writes are applied one by one (about 1.1 s apart, through the usual `/api/entry`, MAL and AniList only, never Simkl). It only reads snapshots.
+Settings > "Restaurer ma liste" compares a daily snapshot of your MAL / AniList list with the live one and lists every difference (changed, added since, removed since). You pick the snapshot day (its local time is shown), uncheck what you changed on purpose, and the writes are applied one by one (about 1.1 s apart, through the usual `/api/entry`, MAL and AniList only, anime only). It only reads snapshots.
 
 Snapshots are written when the **Stats page** is opened (one per day, overwritten on each visit): do not open Stats before restoring, as it replaces today's snapshot with the current, possibly damaged, list.
 
@@ -164,8 +164,7 @@ Snapshots are written when the **Stats page** is opened (one per day, overwritte
 | "Too many requests" toasts / 429 errors | AniList allows ~30-90 requests/min. AniSync honours `Retry-After` (2 retries max); wait a minute. Bulk alignment spaces its writes by about 1 s. |
 | `SQLITE_CANTOPEN` / folder not writable | The `/data` volume is not writable by uid 1000: use a named volume or `chown 1000:1000`. |
 | Redirected to the wrong URL after login / OAuth | `APP_URL` does not match the public domain (e.g. `http` instead of `https`). |
-| Simkl: `invalid_client` | The Simkl app is not an AUTH V2 app, or the client id / secret is wrong. |
-| Simkl: "Connexion Simkl expirée" | The refresh token lapsed (180 days without using the app) or the app was revoked in Simkl's Connected Apps: click **Reconnecter**. |
+| Search shows empty / no Séries and Films tabs in Ajouter | `TMDB_API_KEY` is missing or invalid. Set it (v3 key or v4 token) and redeploy; tracked entries keep working without it. |
 | Session cookie not kept | Over HTTPS the cookie is `Secure`: access the app through the HTTPS domain set in `APP_URL`. |
 
 ## How sync works
@@ -179,33 +178,19 @@ Snapshots are written when the **Stats page** is opened (one per day, overwritte
 
 Keyboard shortcuts (desktop): `/` search, `+` on a focused card = next episode, `-` = previous episode.
 
-## Simkl: shows, movies and anime
+## Shows and movies
 
-Simkl is optional. Once connected:
+Shows and movies are tracked **locally** in AniSync (status, episodes, score, start / finish dates), with no external account. TMDB is only the catalogue: search, posters, seasons / episodes and the next airing episode (`TMDB_API_KEY`, optional).
 
-- **Anime**: for anime, **MAL and AniList are the only sources of truth**. Simkl is a one-way, write-only mirror: it
-  receives their state and never influences it. Every +1, status change and score is also written to Simkl, using
-  the MAL / AniList ids and MAL-style episode numbers (Simkl's anime-native "Path B", so there is no season
-  mapping). The out-of-sync check still reports Simkl differences ("Absent sur Simkl", "Simkl à mettre à jour"),
-  but "Aligner sur le max" only compares MAL and AniList, there is no "Garder Simkl", and a Simkl anime that is
-  not in the MAL / AniList lists is ignored (never added to them).
-- **Shows and movies** live on Simkl only. Search them in **Ajouter** (Anime / Séries / Films), +1 marks the next
-  episode (`S02E05`), -1 removes the last one; a movie gets a **Vu** button. Movies only have À voir, Terminé and
-  Abandonné, like on Simkl.
-- A **Tout / Anime / Séries / Films** filter sits on the home page and the library (kept in the URL, `?kind=`).
-  Stats and boosters stay anime only.
-- Simkl has no "Revisionnage" status: a rewatch is "En cours" there, and it is not reported as out of sync.
+- Search them in **Ajouter** (Anime / Séries / Films). +1 marks the next aired episode (`S02E05`), -1 removes the last one; "À jour" shows when you are caught up, and returning shows display their next airing date.
+- A movie gets a **Vu** button and only has À voir, Terminé and Abandonné.
+- Marking a show **Terminé** fills in all its aired episodes.
+- A **Tout / Anime / Séries / Films** filter sits on the home page and the library (kept in the URL, `?kind=`). Stats and boosters stay anime only.
+- Metadata is cached in `tmdb_media` and refreshed lazily: returning shows after 12 h, ended shows after 7 days, movies after 30 days, at most 20 refreshes per list load.
+- Once added, an entry works without TMDB (title, poster and year are stored with it): without `TMDB_API_KEY` you just cannot search or refresh.
+- **Migration**: upgrading removes the stored Simkl connection automatically. Simkl data is not imported: re-add your shows and movies.
 
-How it talks to Simkl (`lib/simkl.ts`, pure parts in `lib/simkl-core.ts`, `lib/simkl-parse.ts`, `lib/simkl-payloads.ts`):
-
-- **AUTH V2** with PKCE S256. The access token lasts 7 days and is refreshed automatically (a day before expiry or on
-  a 401); the refresh token lasts 180 days and slides forward on every refresh, so reconnecting is only needed after
-  six months without using the app.
-- The library is read with `GET /sync/all-items` only when `GET /sync/activities` says something changed.
-- Writes are planned as a list of POST calls (`/sync/history`, `/sync/history/remove`, `/sync/add-to-list`,
-  `/sync/ratings`) and sent one at a time, at least 1.1 s apart: Simkl allows 1 POST a second and suspends apps
-  that keep going over.
-- Posters go through `wsrv.nl`, as Simkl recommends. Simkl requires attribution: each title links to its Simkl page.
+This product uses the TMDB API but is not endorsed or certified by TMDB. (TMDB's terms require this notice; it is also shown in Paramètres.)
 
 ## Booster packs
 

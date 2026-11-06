@@ -1,15 +1,18 @@
 import type { ServiceName } from "./mapping";
 
+/** Where an external call goes: an anime list service or the TMDB catalogue. */
+export type ErrorSource = ServiceName | "tmdb";
+
 export type ErrorCode = "not_connected" | "unauthorized" | "rate_limited" | "timeout" | "network" | "not_found" | "api";
 
-/** Typed error for every call made to MAL or AniList. */
+/** Typed error for every call made to MAL, AniList or TMDB. */
 export class ServiceError extends Error {
   override name = "ServiceError";
-  readonly service: ServiceName;
+  readonly service: ErrorSource;
   readonly status: number;
   readonly code: ErrorCode;
 
-  constructor(service: ServiceName, status: number, message: string, code?: ErrorCode) {
+  constructor(service: ErrorSource, status: number, message: string, code?: ErrorCode) {
     super(message);
     this.service = service;
     this.status = status;
@@ -28,9 +31,9 @@ export function notConnected(service: ServiceName): ServiceError {
   return new ServiceError(service, 401, `${serviceLabel(service)} n'est pas connecté`, "not_connected");
 }
 
-export function serviceLabel(service: ServiceName): string {
+export function serviceLabel(service: ErrorSource): string {
   if (service === "mal") return "MyAnimeList";
-  if (service === "simkl") return "Simkl";
+  if (service === "tmdb") return "TMDB";
   return "AniList";
 }
 

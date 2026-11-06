@@ -7,7 +7,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { useList } from "@/hooks/use-list";
 import type { ConnectionInfo } from "@/lib/client-api";
-import { daysUntil, SERVICE_LABELS } from "@/lib/labels";
+import { daysUntil, SLOT_LABELS } from "@/lib/labels";
 import type { ServiceName } from "@/lib/mapping";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
   const dismiss = (id: string) => setDismissed((d) => [...d, id]);
   const banners: React.ReactNode[] = [];
 
-  // The settings page already shows the connection cards. Simkl is optional: never nag to connect it.
+  // The settings page already shows the connection cards. Nothing to connect for shows and movies.
   const missing = onSettings ? [] : (["mal", "anilist"] as const).filter((s) => !current[s]);
   if (missing.length === 2 && !dismissed.includes("connect-all")) {
     banners.push(
@@ -90,7 +90,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
             </Button>
           }
         >
-          {SERVICE_LABELS[service]} non connecté : les modifications iront seulement sur {SERVICE_LABELS[other]}.
+          {SLOT_LABELS[service]} non connecté : les modifications iront seulement sur {SLOT_LABELS[other]}.
         </Banner>,
       );
     }
@@ -119,7 +119,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
     }
   }
 
-  for (const service of ["mal", "anilist", "simkl"] as const) {
+  for (const service of ["mal", "anilist"] as const) {
     const error = data?.errors[service];
     if (error && !dismissed.includes(`error-${service}`)) {
       banners.push(
@@ -133,7 +133,7 @@ export function ConnectionBanners({ connections }: { connections: Record<Service
             </Button>
           }
         >
-          Impossible de charger la liste {SERVICE_LABELS[service]} : {error}
+          Impossible de charger la liste {SLOT_LABELS[service]} : {error}
         </Banner>,
       );
     }

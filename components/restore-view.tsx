@@ -10,7 +10,7 @@ import { Cover } from "@/components/entry-bits";
 import { Button } from "@/components/ui/button";
 import { LIST_KEY } from "@/hooks/use-list";
 import { api, type WriteResult } from "@/lib/client-api";
-import { SERVICE_LABELS, STATUS_LABELS } from "@/lib/labels";
+import { SLOT_LABELS, STATUS_LABELS } from "@/lib/labels";
 import type { RestoreItem, RestoreService, RestoreState } from "@/lib/restore";
 import type { RestorePlan, SnapshotDay } from "@/lib/restore-source";
 
@@ -42,7 +42,7 @@ function assertDone(result: WriteResult, service: RestoreService): void {
   if (r.skipped) throw new Error("Service non connecté ou entrée introuvable");
 }
 
-/** Applies one item through the regular entry API, on its own service only (never Simkl). */
+/** Applies one item through the regular entry API, on its own service only. */
 async function applyItem(item: RestoreItem): Promise<void> {
   const ids = {
     key: item.key,
@@ -158,8 +158,7 @@ export function RestoreView() {
         <div className="flex flex-col gap-1">
           <p className="font-medium">N&apos;ouvre pas la page Stats avant d&apos;avoir restauré : elle remplace l&apos;instantané du jour.</p>
           <p className="text-muted-foreground">
-            Choisis un instantané pris avant le problème. Les heures sont affichées dans ton fuseau local. Simkl n&apos;est
-            jamais modifié par la restauration.
+            Choisis un instantané pris avant le problème. Les heures sont affichées dans ton fuseau local.
           </p>
         </div>
       </div>
@@ -192,7 +191,7 @@ export function RestoreView() {
                 <span className="font-medium capitalize">{dayFormat.format(new Date(`${d.day}T00:00:00Z`))}</span>
                 {SERVICES.map((s) => (
                   <span key={s} className="text-muted-foreground">
-                    {SERVICE_LABELS[s]} :{" "}
+                    {SLOT_LABELS[s]} :{" "}
                     {d[s] ? `pris à ${timeFormat.format(d[s].fetchedAt)} · ${d[s].count} entrées` : "pas d'instantané"}
                   </span>
                 ))}
@@ -235,7 +234,7 @@ export function RestoreView() {
                     return (
                       <div key={service} className="flex flex-col gap-1.5">
                         <h3 className="text-sm font-semibold">
-                          {SERVICE_LABELS[service]} ({group.length})
+                          {SLOT_LABELS[service]} ({group.length})
                         </h3>
                         <ul className="flex flex-col gap-1.5">
                           {group.map((item) => (
@@ -302,7 +301,7 @@ export function RestoreView() {
               <p className="text-xs text-muted-foreground">
                 Instantanés :{" "}
                 {SERVICES.filter((s) => planData.fetchedAt[s] !== undefined)
-                  .map((s) => `${SERVICE_LABELS[s]} ${timeFormat.format(planData.fetchedAt[s])}`)
+                  .map((s) => `${SLOT_LABELS[s]} ${timeFormat.format(planData.fetchedAt[s])}`)
                   .join(" · ")}
               </p>
             </>

@@ -21,11 +21,15 @@ export const ANILIST_STATUSES = ["CURRENT", "COMPLETED", "PAUSED", "DROPPED", "P
 export type AniListStatus = (typeof ANILIST_STATUSES)[number];
 
 export type SyncField = "status" | "progress" | "score";
-export type ServiceName = "mal" | "anilist" | "simkl";
-/** The historical anime services (Simkl is handled separately: it also holds shows and movies). */
+export type ServiceName = "mal" | "anilist";
+/** The anime list services. */
 export const ANIME_SERVICES = ["mal", "anilist"] as const;
-export const ALL_SERVICES = ["mal", "anilist", "simkl"] as const;
+/** A slot is a place where the state of an entry lives; `local` is the AniSync tracking (shows and movies). */
+export const SLOTS = ["mal", "anilist", "local"] as const;
+export type Slot = (typeof SLOTS)[number];
 export type MediaKind = "anime" | "show" | "movie";
+/** Kinds tracked locally in AniSync (TMDB only provides the catalogue). */
+export type LocalKind = Exclude<MediaKind, "anime">;
 
 /** State of one list entry on one service, expressed in the canonical model. */
 export interface EntryState {
@@ -86,39 +90,6 @@ export function fromAniListStatus(status: AniListStatus): CanonicalStatus {
   return FROM_ANILIST[status];
 }
 
-export const SIMKL_STATUSES = ["watching", "plantowatch", "completed", "hold", "dropped"] as const;
-export type SimklStatus = (typeof SIMKL_STATUSES)[number];
-
-const TO_SIMKL: Record<CanonicalStatus, SimklStatus> = {
-  watching: "watching",
-  rewatching: "watching",
-  completed: "completed",
-  on_hold: "hold",
-  dropped: "dropped",
-  plan_to_watch: "plantowatch",
-};
-
-const FROM_SIMKL: Record<SimklStatus, CanonicalStatus> = {
-  watching: "watching",
-  plantowatch: "plan_to_watch",
-  completed: "completed",
-  hold: "on_hold",
-  dropped: "dropped",
-};
-
-/** Movies are atomic on Simkl: no watching / hold, so they fall back to the closest status. */
-export function toSimklStatus(status: CanonicalStatus, kind: MediaKind): SimklStatus {
-  if (kind === "movie") {
-    if (status === "watching" || status === "rewatching") return "completed";
-    if (status === "on_hold") return "plantowatch";
-  }
-  return TO_SIMKL[status];
-}
-
-export function fromSimklStatus(status: SimklStatus): CanonicalStatus {
-  return FROM_SIMKL[status];
-}
-
 /** Statuses a user can pick for a given kind of media. */
 export function statusesForKind(kind: MediaKind): CanonicalStatus[] {
   if (kind === "movie") return ["plan_to_watch", "completed", "dropped"];
@@ -177,20 +148,6 @@ export function diffStates(a: EntryState, b: EntryState): SyncField[] {
   return diff;
 }
 
-/** Simkl has no "rewatching" status: it is the same as "watching" when comparing. */
-function comparableStatus(status: CanonicalStatus): CanonicalStatus {
-  return status === "rewatching" ? "watching" : status;
-}
-
-/** Diff between a MAL/AniList reference state and the Simkl state (rewatching = watching). */
-export function diffWithSimkl(reference: EntryState, simkl: EntryState): SyncField[] {
-  const diff: SyncField[] = [];
-  if (comparableStatus(reference.status) !== comparableStatus(simkl.status)) diff.push("status");
-  if (reference.progress !== simkl.progress) diff.push("progress");
-  if (reference.score !== simkl.score) diff.push("score");
-  return diff;
-}
-
 /** Applies a patch to a state, normalising values. */
 export function applyPatch(state: EntryState, patch: EntryPatch, total: number | null): EntryState {
   return {
@@ -242,10 +199,7 @@ export function pickMostAdvanced(states: readonly (EntryState | null)[]): EntryS
   return best;
 }
 
-/**
- * The anime state that counts: the most advanced of MAL / AniList.
- * Deliberately takes no Simkl argument: Simkl is a write-only mirror for anime.
- */
+/** The anime state that counts: the most advanced of MAL / AniList. */
 export function animeMaxState(mal: EntryState | null, anilist: EntryState | null): EntryState | null {
   if (mal && anilist) return maxState(mal, anilist);
   return mal ?? anilist;

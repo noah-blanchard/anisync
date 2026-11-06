@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       key: body.data.key,
       malId: body.data.malId ?? null,
       anilistId: body.data.anilistId ?? null,
-      simkl: body.data.simkl,
+      tmdb: body.data.tmdb,
       patch: body.data.patch,
       targets: body.data.targets,
     });
@@ -34,7 +34,7 @@ export async function DELETE(req: Request) {
       key: body.data.key,
       malId: body.data.malId ?? null,
       anilistId: body.data.anilistId ?? null,
-      simkl: body.data.simkl,
+      tmdb: body.data.tmdb,
       targets: body.data.targets,
     });
     return NextResponse.json(result);

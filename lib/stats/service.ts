@@ -41,7 +41,7 @@ async function toSilver(
 
 async function loadStats(force: boolean): Promise<StatsPayload> {
   const [list, raw] = await Promise.all([getMergedList({ force }), loadRawLists({ force })]);
-  // Stats are anime only: a Simkl loading error is not relevant here.
+  // Stats are anime only: shows and movies are left out.
   const errors = [list.errors.mal, list.errors.anilist].filter((m): m is string => Boolean(m));
   return toSilver(
     list.entries.filter((e) => e.kind === "anime"),

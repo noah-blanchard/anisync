@@ -49,7 +49,7 @@ export function countKinds(entries: readonly Pick<MergedEntry, "kind">[]): Recor
 
 /**
  * Kind filter state: `?kind=` wins, then the last choice kept in localStorage, then "all".
- * Always "all" when the filter is not available (Simkl not connected).
+ * Always "all" when the filter is not available (no TMDB key and no show or movie tracked).
  */
 export function useKindFilter(available: boolean): [KindFilterValue, (value: KindFilterValue) => void] {
   const router = useRouter();

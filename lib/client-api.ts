@@ -1,7 +1,7 @@
 import type { ConnectionInfo } from "./connections";
-import type { AnnotatedSearchResult, ListPayload, ServiceResult, WriteResult } from "./sync";
+import type { AnnotatedSearchResult, ListPayload, MediaSearchResult, ServiceResult, WriteResult } from "./sync";
 
-export type { AnnotatedSearchResult, ConnectionInfo, ListPayload, ServiceResult, WriteResult };
+export type { AnnotatedSearchResult, ConnectionInfo, ListPayload, MediaSearchResult, ServiceResult, WriteResult };
 
 export class ApiError extends Error {
   override name = "ApiError";

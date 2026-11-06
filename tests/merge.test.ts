@@ -4,8 +4,10 @@ import {
   computeSync,
   displayState,
   mergeLists,
+  tmdbKey,
   unresolvedMalIds,
   type AniListListItem,
+  type LocalListItem,
   type MalListItem,
 } from "@/lib/merge";
 
@@ -51,7 +53,7 @@ const noMap = new Map<number, number | null>();
 
 describe("mergeLists", () => {
   it("joins entries on idMal and flags them in sync", () => {
-    const merged = mergeLists({ mal: [mal(1, { progress: 3 })], anilist: [al(101, 1, { progress: 3 })], simkl: null, idMap: noMap });
+    const merged = mergeLists({ mal: [mal(1, { progress: 3 })], anilist: [al(101, 1, { progress: 3 })], local: [], idMap: noMap });
     expect(merged).toHaveLength(1);
     const [entry] = merged;
     expect(entry).toMatchObject({
@@ -73,7 +75,7 @@ describe("mergeLists", () => {
     const [entry] = mergeLists({
       mal: [mal(1, { progress: 3, score: 7, status: "watching" })],
       anilist: [al(101, 1, { progress: 4, score: 8, status: "rewatching" })],
-      simkl: null, idMap: noMap,
+      local: [], idMap: noMap,
     });
     expect(entry?.inSync).toBe(false);
     expect(entry?.diff).toEqual(["status", "progress", "score"]);
@@ -83,14 +85,14 @@ describe("mergeLists", () => {
     const [entry, ...rest] = mergeLists({
       mal: [mal(1, { progress: 2 })],
       anilist: [al(101, null, { progress: 2 })],
-      simkl: null, idMap: new Map([[1, 101]]),
+      local: [], idMap: new Map([[1, 101]]),
     });
     expect(rest).toHaveLength(0);
     expect(entry).toMatchObject({ malId: 1, anilistId: 101, availability: "both", inSync: true });
   });
 
   it("marks AniList entries without idMal as anilist_only, never out of sync", () => {
-    const [entry] = mergeLists({ mal: [], anilist: [al(500, null, { progress: 5 })], simkl: null, idMap: noMap });
+    const [entry] = mergeLists({ mal: [], anilist: [al(500, null, { progress: 5 })], local: [], idMap: noMap });
     expect(entry).toMatchObject({
       key: "al:500",
       malId: null,
@@ -102,7 +104,7 @@ describe("mergeLists", () => {
   });
 
   it("marks MAL entries confirmed missing on AniList as mal_only", () => {
-    const [entry] = mergeLists({ mal: [mal(7)], anilist: [], simkl: null, idMap: new Map([[7, null]]) });
+    const [entry] = mergeLists({ mal: [mal(7)], anilist: [], local: [], idMap: new Map([[7, null]]) });
     expect(entry).toMatchObject({ malId: 7, anilistId: null, availability: "mal_only", inSync: true });
   });
 
@@ -110,7 +112,7 @@ describe("mergeLists", () => {
     const merged = mergeLists({
       mal: [mal(1)],
       anilist: [al(202, 2)],
-      simkl: null, idMap: new Map([[1, 101]]),
+      local: [], idMap: new Map([[1, 101]]),
     });
     const onlyMal = merged.find((e) => e.malId === 1);
     const onlyAl = merged.find((e) => e.malId === 2);
@@ -119,11 +121,11 @@ describe("mergeLists", () => {
   });
 
   it("does not flag anything when a service is not connected", () => {
-    const merged = mergeLists({ mal: [mal(1), mal(2)], anilist: null, simkl: null, idMap: noMap });
+    const merged = mergeLists({ mal: [mal(1), mal(2)], anilist: null, local: [], idMap: noMap });
     expect(merged).toHaveLength(2);
     expect(merged.every((e) => e.inSync && e.missingOn === null)).toBe(true);
 
-    const alOnly = mergeLists({ mal: null, anilist: [al(101, 1)], simkl: null, idMap: noMap });
+    const alOnly = mergeLists({ mal: null, anilist: [al(101, 1)], local: [], idMap: noMap });
     expect(alOnly[0]).toMatchObject({ malId: 1, inSync: true, missingOn: null });
   });
 
@@ -131,13 +133,13 @@ describe("mergeLists", () => {
     const [entry] = mergeLists({
       mal: [mal(1, {}, { totalEpisodes: 24 })],
       anilist: [al(101, 1, {}, { totalEpisodes: null })],
-      simkl: null, idMap: noMap,
+      local: [], idMap: noMap,
     });
     expect(entry?.totalEpisodes).toBe(24);
   });
 
   it("treats MAL total 0 as unknown", () => {
-    const [entry] = mergeLists({ mal: [mal(1, {}, { totalEpisodes: 0 })], anilist: null, simkl: null, idMap: noMap });
+    const [entry] = mergeLists({ mal: [mal(1, {}, { totalEpisodes: 0 })], anilist: null, local: [], idMap: noMap });
     expect(entry?.totalEpisodes).toBeNull();
   });
 
@@ -145,7 +147,7 @@ describe("mergeLists", () => {
     const merged = mergeLists({
       mal: [mal(1, { updatedAt: 10 }), mal(2, { updatedAt: 30 })],
       anilist: [al(103, 3, { updatedAt: 20 })],
-      simkl: null, idMap: noMap,
+      local: [], idMap: noMap,
     });
     expect(merged.map((e) => e.malId)).toEqual([2, 3, 1]);
   });
@@ -156,7 +158,7 @@ describe("unresolvedMalIds", () => {
     const ids = unresolvedMalIds({
       mal: [mal(1), mal(2), mal(3), mal(4)],
       anilist: [al(101, 1)],
-      simkl: null, idMap: new Map([
+      local: [], idMap: new Map([
         [2, 102],
         [3, null],
       ]),
@@ -168,13 +170,69 @@ describe("unresolvedMalIds", () => {
 describe("computeSync / displayState", () => {
   it("recomputes sync after an optimistic change", () => {
     const sync = computeSync(
-      { kind: "anime", mal: state({ progress: 4 }), anilist: state({ progress: 4 }), simkl: null, availability: "both" },
-      { mal: true, anilist: true, simkl: false },
+      { kind: "anime", mal: state({ progress: 4 }), anilist: state({ progress: 4 }), local: null, availability: "both" },
+      { mal: true, anilist: true },
     );
     expect(sync).toMatchObject({ inSync: true, diff: [] });
   });
 
   it("shows the most advanced side", () => {
-    expect(displayState({ kind: "anime", mal: state({ progress: 2 }), anilist: state({ progress: 5 }), simkl: null })?.progress).toBe(5);
+    expect(displayState({ kind: "anime", mal: state({ progress: 2 }), anilist: state({ progress: 5 }), local: null })?.progress).toBe(5);
+  });
+});
+
+function localItem(partial: Partial<LocalListItem> = {}): LocalListItem {
+  return {
+    tmdbId: 1396,
+    kind: "show",
+    title: "Breaking Bad",
+    originalTitle: null,
+    cover: "https://image.tmdb.org/t/p/w342/bb.jpg",
+    year: 2008,
+    totalEpisodes: 62,
+    nextEpisode: { season: 1, episode: 4, title: null },
+    lastEpisode: { season: 1, episode: 3, title: null },
+    nextAiring: null,
+    state: state({ progress: 3, updatedAt: 5000 }),
+    ...partial,
+  };
+}
+
+describe("local shows and movies", () => {
+  it("adds them next to the anime, with a tmdb key and no mal / anilist side", () => {
+    const merged = mergeLists({ mal: [mal(1)], anilist: null, local: [localItem()], idMap: noMap });
+    expect(merged).toHaveLength(2);
+    const show = merged.find((e) => e.kind === "show");
+    expect(show).toMatchObject({
+      key: tmdbKey("show", 1396),
+      tmdbId: 1396,
+      malId: null,
+      anilistId: null,
+      mal: null,
+      anilist: null,
+      availability: "local",
+      totalEpisodes: 62,
+      inSync: true,
+      missingOn: null,
+      updatedAt: 5000,
+    });
+    expect(show?.nextEpisode).toEqual({ season: 1, episode: 4, title: null });
+    expect(displayState(show!)?.progress).toBe(3);
+  });
+
+  it("treats a movie as a single episode without pointers", () => {
+    const [movie] = mergeLists({
+      mal: null,
+      anilist: null,
+      local: [localItem({ kind: "movie", tmdbId: 603, totalEpisodes: null, state: state({ status: "completed", progress: 1 }) })],
+      idMap: noMap,
+    });
+    expect(movie).toMatchObject({ key: "tmdb:movie:603", totalEpisodes: 1, nextEpisode: null, lastEpisode: null });
+  });
+
+  it("never reports a sync difference for local entries", () => {
+    expect(
+      computeSync({ kind: "show", mal: null, anilist: null, local: state({ updatedAt: 9 }), availability: "local" }, { mal: true, anilist: true }),
+    ).toEqual({ inSync: true, diff: [], missingOn: null, updatedAt: 9 });
   });
 });

@@ -36,8 +36,8 @@ function entry(id: number, s: EntryState, extra: Partial<MergedEntry> = {}): Mer
   return {
     key: `mal:${id}`,
     kind: "anime",
-    simklId: null,
-    simkl: null,
+    tmdbId: null,
+    local: null,
     year: null,
     nextEpisode: null,
     lastEpisode: null,

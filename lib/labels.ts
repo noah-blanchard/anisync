@@ -1,4 +1,4 @@
-import type { CanonicalStatus, MediaKind, ServiceName } from "./mapping";
+import type { CanonicalStatus, LocalKind, MediaKind, Slot } from "./mapping";
 import type { EpisodeRef, NextAiring } from "./merge";
 
 export const STATUS_LABELS: Record<CanonicalStatus, string> = {
@@ -19,7 +19,8 @@ export const STATUS_ORDER: CanonicalStatus[] = [
   "dropped",
 ];
 
-export const SERVICE_LABELS: Record<ServiceName, string> = { mal: "MAL", anilist: "AniList", simkl: "Simkl" };
+/** Where an entry lives: MAL, AniList, or the local AniSync tracking (shows and movies). */
+export const SLOT_LABELS: Record<Slot, string> = { mal: "MAL", anilist: "AniList", local: "AniSync" };
 
 export const KIND_LABELS: Record<MediaKind, string> = { anime: "Anime", show: "Série", movie: "Film" };
 
@@ -29,11 +30,9 @@ export function episodeCode(ref: Pick<EpisodeRef, "season" | "episode">): string
   return `S${pad(ref.season)}E${pad(ref.episode)}`;
 }
 
-const SIMKL_PATHS: Record<MediaKind, string> = { anime: "anime", show: "tv", movie: "movies" };
-
-/** Public Simkl page of a title (attribution link). */
-export function simklUrl(kind: MediaKind, id: number): string {
-  return `https://simkl.com/${SIMKL_PATHS[kind]}/${id}`;
+/** Public TMDB page of a show or movie (attribution link). */
+export function tmdbUrl(kind: LocalKind, id: number): string {
+  return `https://www.themoviedb.org/${kind === "show" ? "tv" : "movie"}/${id}`;
 }
 
 const FORMAT_LABELS: Record<string, string> = {
