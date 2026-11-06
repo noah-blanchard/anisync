@@ -50,7 +50,7 @@ Environment variables (all validated at startup; the app exits with a clear mess
 | `MAL_CLIENT_ID` | MyAnimeList app client ID. |
 | `MAL_CLIENT_SECRET` | Optional: present for a MAL app of type "web". |
 | `ANILIST_CLIENT_ID` / `ANILIST_CLIENT_SECRET` | AniList client credentials. |
-| `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET` | Optional. Simkl client credentials (AUTH V2 app). Without `SIMKL_CLIENT_ID`, everything Simkl stays hidden. |
+| `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET` | Optional. Simkl AUTH V2 client id; the secret only for a "Server apps & services" app (a "Browser sign-in" app has none). Without `SIMKL_CLIENT_ID`, everything Simkl stays hidden. |
 | `DATABASE_PATH` | SQLite file (`./data/anisync.db` locally, `/data/anisync.db` in production). |
 
 > ⚠️ Changing `APP_SECRET` invalidates the session **and** makes stored tokens unreadable: you will have to reconnect MAL and AniList.
@@ -74,10 +74,12 @@ MAL accepts **only one** redirect URL per client: create a separate client for l
 3. Copy the **ID** (`ANILIST_CLIENT_ID`) and the **Secret** (`ANILIST_CLIENT_SECRET`).
 
 ### Simkl (optional)
-1. Go to <https://simkl.com/settings/developer/> → create a new app, of type **Server apps & services**, on **AUTH V2**
-   (a V1 client id is rejected with `invalid_client`; V1 is being retired around April 2027).
+1. Go to <https://simkl.com/settings/developer/> → create a new app on **AUTH V2**, of type
+   **Browser sign-in + app callback** (a V1 client id is rejected with `invalid_client`; V1 is being retired around April 2027).
 2. **Redirect URI**: `${APP_URL}/api/auth/simkl/callback`, exactly (same protocol and domain, no trailing slash).
-3. Copy the **Client ID** (`SIMKL_CLIENT_ID`) and the **Client Secret** (`SIMKL_CLIENT_SECRET`), redeploy, then **Paramètres → Simkl → Connecter**.
+3. Copy the **Client ID** into `SIMKL_CLIENT_ID`, redeploy, then **Paramètres → Simkl → Connecter**.
+   This app type has no client secret (sign-in uses PKCE): leave `SIMKL_CLIENT_SECRET` empty. Fill it only with a
+   **Server apps & services** app, which comes with a secret.
 
 The exact URIs are shown (with a copy button) on the **Paramètres** (settings) page once the app is running.
 
