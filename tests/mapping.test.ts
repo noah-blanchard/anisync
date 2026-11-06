@@ -13,7 +13,7 @@ import {
   maxState,
   normalizeTotal,
   patchBetween,
-  pickDisplayState,
+  animeMaxState,
   reachedEnd,
   toAniListScoreRaw,
   toAniListStatus,
@@ -183,12 +183,12 @@ describe("state helpers", () => {
   it("picks the most advanced state for display", () => {
     const mal = state({ progress: 4, updatedAt: 10 });
     const al = state({ progress: 5, updatedAt: 5 });
-    expect(pickDisplayState(mal, al)).toBe(al);
-    expect(pickDisplayState(mal, null)).toBe(mal);
-    expect(pickDisplayState(null, al)).toBe(al);
-    expect(pickDisplayState(null, null)).toBeNull();
+    expect(animeMaxState(mal, al)).toMatchObject({ progress: 5 });
+    expect(animeMaxState(mal, null)).toBe(mal);
+    expect(animeMaxState(null, al)).toBe(al);
+    expect(animeMaxState(null, null)).toBeNull();
     // tie on progress: most recent wins
-    expect(pickDisplayState(state({ progress: 4, updatedAt: 1 }), state({ progress: 4, updatedAt: 2 }))?.updatedAt).toBe(2);
+    expect(animeMaxState(state({ progress: 4, updatedAt: 1 }), state({ progress: 4, updatedAt: 2 }))?.updatedAt).toBe(2);
   });
 
   it("maxState keeps highest progress (with its status) and highest score", () => {

@@ -175,6 +175,6 @@ describe("computeSync / displayState", () => {
   });
 
   it("shows the most advanced side", () => {
-    expect(displayState({ mal: state({ progress: 2 }), anilist: state({ progress: 5 }), simkl: null })?.progress).toBe(5);
+    expect(displayState({ kind: "anime", mal: state({ progress: 2 }), anilist: state({ progress: 5 }), simkl: null })?.progress).toBe(5);
   });
 });

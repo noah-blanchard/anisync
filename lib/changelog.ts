@@ -9,6 +9,15 @@ export type ChangelogRelease = {
 /** Newest first. Add an entry (and bump package.json) with each user-facing change. */
 export const CHANGELOG: ChangelogRelease[] = [
   {
+    version: "1.10.1",
+    date: "2026-11-06",
+    title: "Simkl ne modifie plus tes anime",
+    changes: [
+      "Simkl ne modifie plus jamais tes anime sur MyAnimeList et AniList : il ne fait que recopier leur état.",
+      "Paramètres → Restaurer ma liste : remets MAL et AniList dans l'état d'un instantané quotidien, différence par différence.",
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-11-06",
     title: "Séries, films et Simkl",

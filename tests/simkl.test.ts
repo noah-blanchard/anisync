@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  animeMaxState,
   diffWithSimkl,
   fromSimklStatus,
   maxState,
@@ -10,6 +11,7 @@ import {
   type EntryState,
 } from "@/lib/mapping";
 import {
+  animeTruthState,
   computeSync,
   displayState,
   mergeLists,
@@ -147,24 +149,13 @@ describe("mergeLists with Simkl", () => {
     expect(entry?.simkl).not.toBeNull();
   });
 
-  it("creates an entry for an unattached Simkl anime with a MAL id", () => {
-    const [entry] = mergeLists({ mal: [], anilist: [], simkl: [sk(900, { malId: 5 })], idMap: noMap });
-    expect(entry).toMatchObject({
-      key: "mal:5",
-      kind: "anime",
-      malId: 5,
-      anilistId: null,
-      simklId: 900,
-      availability: "both",
-      mal: null,
-      anilist: null,
-      title: "Simkl 900",
-    });
+  it("ignores a Simkl anime absent from the MAL and AniList lists", () => {
+    expect(mergeLists({ mal: [], anilist: [], simkl: [sk(900, { malId: 5 })], idMap: noMap })).toEqual([]);
+    expect(mergeLists({ mal: [mal(1)], anilist: [], simkl: [sk(900, { malId: 5 })], idMap: noMap })).toHaveLength(1);
   });
 
-  it("creates a simkl_only entry for a Simkl anime without any anime id", () => {
-    const [entry] = mergeLists({ mal: [], anilist: [], simkl: [sk(900)], idMap: noMap });
-    expect(entry).toMatchObject({ key: "simkl:anime:900", availability: "simkl_only", inSync: true, missingOn: null });
+  it("ignores a Simkl anime without any anime id", () => {
+    expect(mergeLists({ mal: [], anilist: [], simkl: [sk(900)], idMap: noMap })).toEqual([]);
   });
 
   it("builds show and movie entries", () => {
@@ -252,29 +243,64 @@ describe("computeSync with Simkl", () => {
     expect(sync).toMatchObject({ inSync: true, missingOn: null });
   });
 
-  it("uses the latest updatedAt of the three", () => {
+  it("ignores Simkl for the anime updatedAt", () => {
     const sync = computeSync(
       { kind: "anime", mal: state({ updatedAt: 1 }), anilist: null, simkl: state({ updatedAt: 9 }), availability: "mal_only" },
       all3,
     );
-    expect(sync.updatedAt).toBe(9);
+    expect(sync.updatedAt).toBe(1);
   });
 });
 
-describe("displayState / maxState", () => {
-  it("picks the most advanced of three", () => {
-    const entry = { mal: state({ progress: 2 }), anilist: state({ progress: 3 }), simkl: state({ progress: 5 }) };
-    expect(displayState(entry)?.progress).toBe(5);
+describe("displayState / maxState (Simkl is a mirror)", () => {
+  it("ignores Simkl even with a higher progress", () => {
+    const entry = { kind: "anime" as const, mal: state({ progress: 2 }), anilist: state({ progress: 3 }), simkl: state({ progress: 5 }) };
+    expect(displayState(entry)?.progress).toBe(3);
     expect(displayState({ ...entry, simkl: null })?.progress).toBe(3);
   });
 
-  it("breaks ties with the most recent update", () => {
-    const entry = {
-      mal: state({ progress: 2, updatedAt: 1 }),
-      anilist: null,
-      simkl: state({ progress: 2, updatedAt: 5, status: "completed" }),
-    };
-    expect(displayState(entry)?.status).toBe("completed");
+  it("does not let a Simkl-only anime state show", () => {
+    expect(displayState({ kind: "anime", mal: null, anilist: null, simkl: state({ progress: 2 }) })).toBeNull();
+  });
+
+  it("uses the Simkl state for shows and movies", () => {
+    for (const kind of ["show", "movie"] as const) {
+      expect(displayState({ kind, mal: null, anilist: null, simkl: state({ progress: 2 }) })?.progress).toBe(2);
+    }
+  });
+
+  it("INCIDENT: on_hold on MAL and AniList stays on_hold against a fresher watching Simkl", () => {
+    const old = { status: "on_hold" as const, progress: 5, updatedAt: 100 };
+    const [entry] = mergeLists({
+      mal: [mal(1, old)],
+      anilist: [al(101, 1, old)],
+      simkl: [sk(900, { malId: 1 }, { status: "watching", progress: 5, updatedAt: 9_999_999 })],
+      idMap: noMap,
+    });
+    expect(entry?.simkl?.status).toBe("watching");
+    expect(entry && displayState(entry)?.status).toBe("on_hold");
+    // What "Aligner sur le max" writes comes from this helper.
+    expect(entry && animeTruthState(entry)?.status).toBe("on_hold");
+    expect(maxState(entry?.mal as EntryState, entry?.anilist as EntryState).status).toBe("on_hold");
+    // Simkl only needs an update.
+    expect(entry).toMatchObject({ inSync: false, diff: ["status"] });
+  });
+
+  it("INCIDENT: dropped stays dropped against a Simkl watching with higher progress", () => {
+    const [entry] = mergeLists({
+      mal: [mal(1, { status: "dropped", progress: 4, updatedAt: 100 })],
+      anilist: [al(101, 1, { status: "dropped", progress: 4, updatedAt: 100 })],
+      simkl: [sk(900, { malId: 1 }, { status: "watching", progress: 9, updatedAt: 9_999_999 })],
+      idMap: noMap,
+    });
+    expect(entry && animeTruthState(entry)).toMatchObject({ status: "dropped", progress: 4 });
+    expect(entry && displayState(entry)).toMatchObject({ status: "dropped", progress: 4 });
+  });
+
+  it("animeMaxState takes MAL / AniList only and picks the most advanced", () => {
+    expect(animeMaxState(null, null)).toBeNull();
+    expect(animeMaxState(state({ progress: 1 }), null)?.progress).toBe(1);
+    expect(animeMaxState(state({ progress: 1, score: 8 }), state({ progress: 3 }))).toMatchObject({ progress: 3, score: 8 });
   });
 
   it("keeps the highest score across any number of states", () => {
