@@ -26,6 +26,7 @@ browser ──► middleware (HS256 JWT session) ──► Route Handlers /api/*
 - The canonical key of an entry is the **MAL id**; MAL ↔ AniList id pairs are cached in `id_map`.
 - `lib/mapping.ts` and `lib/merge.ts` are pure functions covered by unit tests (`pnpm test`).
 - A write goes to every service in parallel (`Promise.allSettled`); the UI is optimistic and rolls back per service on failure.
+- For anime, MAL and AniList are the sources of truth; Simkl only mirrors them (never read as a source).
 - Shows and movies come from Simkl only (keys `simkl:show:<id>`, `simkl:movie:<id>`); see [Simkl](#simkl-shows-movies-and-anime).
 
 ---
@@ -143,6 +144,12 @@ If your Dokploy version offers volume backups, schedule one on the volume mounte
 
 To restore: stop the container, replace `/data/anisync.db` (and delete `anisync.db-wal` / `-shm`), restart. Keep the same `APP_SECRET`, otherwise the tokens are unreadable.
 
+### Restore a list from a daily snapshot
+
+Settings > "Restaurer ma liste" compares a daily snapshot of your MAL / AniList list with the live one and lists every difference (changed, added since, removed since). You pick the snapshot day (its local time is shown), uncheck what you changed on purpose, and the writes are applied one by one (about 1.1 s apart, through the usual `/api/entry`, MAL and AniList only, never Simkl). It only reads snapshots.
+
+Snapshots are written when the **Stats page** is opened (one per day, overwritten on each visit): do not open Stats before restoring, as it replaces today's snapshot with the current, possibly damaged, list.
+
 ## 6. Troubleshooting
 
 | Symptom | Cause / fix |
@@ -176,10 +183,12 @@ Keyboard shortcuts (desktop): `/` search, `+` on a focused card = next episode, 
 
 Simkl is optional. Once connected:
 
-- **Anime**: Simkl is a third mirror of MAL and AniList. Every +1, status change and score is also written to Simkl,
-  using the MAL / AniList ids and MAL-style episode numbers (Simkl's anime-native "Path B", so there is no season
-  mapping). The out-of-sync check covers Simkl too ("Absent sur Simkl", "Garder Simkl"); an anime only on Simkl is
-  marked "Simkl uniquement".
+- **Anime**: for anime, **MAL and AniList are the only sources of truth**. Simkl is a one-way, write-only mirror: it
+  receives their state and never influences it. Every +1, status change and score is also written to Simkl, using
+  the MAL / AniList ids and MAL-style episode numbers (Simkl's anime-native "Path B", so there is no season
+  mapping). The out-of-sync check still reports Simkl differences ("Absent sur Simkl", "Simkl à mettre à jour"),
+  but "Aligner sur le max" only compares MAL and AniList, there is no "Garder Simkl", and a Simkl anime that is
+  not in the MAL / AniList lists is ignored (never added to them).
 - **Shows and movies** live on Simkl only. Search them in **Ajouter** (Anime / Séries / Films), +1 marks the next
   episode (`S02E05`), -1 removes the last one; a movie gets a **Vu** button. Movies only have À voir, Terminé and
   Abandonné, like on Simkl.

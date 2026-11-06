@@ -348,6 +348,17 @@ export function SettingsView({
 
       <BoosterSection />
 
+      <Section
+        title="Restaurer ma liste"
+        description="Remets MyAnimeList et AniList dans l'état d'un instantané quotidien, différence par différence."
+      >
+        <div>
+          <Button variant="outline" asChild>
+            <Link href="/settings/restore">Ouvrir la restauration</Link>
+          </Button>
+        </div>
+      </Section>
+
       <Section title="Session">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button variant="outline" onClick={logout}>
